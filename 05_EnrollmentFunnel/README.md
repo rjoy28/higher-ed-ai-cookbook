@@ -82,6 +82,10 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 
 *License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
 
+## Sample output
+
+![Sample output chart for the fictional RCU institution](fig_05_enrollment_funnel.png)
+
 ---
 
 ## Files in this recipe
@@ -90,5 +94,7 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 - [`EFA_Input_Template.xlsx`](EFA_Input_Template.xlsx)
 - [`EFA_README.docx`](EFA_README.docx)
 - [`EFA_Sample_Output.xlsx`](EFA_Sample_Output.xlsx)
+
+- [`fig_05_enrollment_funnel.png`](fig_05_enrollment_funnel.png)
 
 *This page is generated from the README `.docx`, which remains the source of truth.*

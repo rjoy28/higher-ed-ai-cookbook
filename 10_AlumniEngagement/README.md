@@ -80,6 +80,10 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 
 *License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
 
+## Sample output
+
+![Sample output chart for the fictional RCU institution](fig_10_alumni_engagement.png)
+
 ---
 
 ## Files in this recipe
@@ -88,5 +92,7 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 - [`ALE_Input_Template.xlsx`](ALE_Input_Template.xlsx)
 - [`ALE_README.docx`](ALE_README.docx)
 - [`ALE_Sample_Output.xlsx`](ALE_Sample_Output.xlsx)
+
+- [`fig_10_alumni_engagement.png`](fig_10_alumni_engagement.png)
 
 *This page is generated from the README `.docx`, which remains the source of truth.*

@@ -80,6 +80,10 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 
 *License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
 
+## Sample output
+
+![Sample output chart for the fictional RCU institution](fig_11_retention_risk.png)
+
 ---
 
 ## Files in this recipe
@@ -88,5 +92,7 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 - [`RRA_Input_Template.xlsx`](RRA_Input_Template.xlsx)
 - [`RRA_README.docx`](RRA_README.docx)
 - [`RRA_Sample_Output.xlsx`](RRA_Sample_Output.xlsx)
+
+- [`fig_11_retention_risk.png`](fig_11_retention_risk.png)
 
 *This page is generated from the README `.docx`, which remains the source of truth.*

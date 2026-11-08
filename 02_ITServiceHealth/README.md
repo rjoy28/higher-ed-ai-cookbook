@@ -84,6 +84,10 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 
 *License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
 
+## Sample output
+
+![Sample output chart for the fictional RCU institution](fig_02_it_service_health.png)
+
 ---
 
 ## Files in this recipe
@@ -92,5 +96,7 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legibl
 - [`ITH_Input_Template.xlsx`](ITH_Input_Template.xlsx)
 - [`ITH_README.docx`](ITH_README.docx)
 - [`ITH_Sample_Output.xlsx`](ITH_Sample_Output.xlsx)
+
+- [`fig_02_it_service_health.png`](fig_02_it_service_health.png)
 
 *This page is generated from the README `.docx`, which remains the source of truth.*

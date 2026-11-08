@@ -82,6 +82,10 @@ Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. Before you trust
 
 License: free to use and adapt for your own institution. White-label / resale rights are separate — contact the Cookbook. Build 2026-07. Sample data is fictional.
 
+## Sample output
+
+![Sample output chart for the fictional RCU institution](fig_01_academic_portfolio.png)
+
 ---
 
 ## Files in this recipe
@@ -90,5 +94,7 @@ License: free to use and adapt for your own institution. White-label / resale ri
 - [`APA_Input_Template.xlsx`](APA_Input_Template.xlsx)
 - [`APA_README.docx`](APA_README.docx)
 - [`APA_Sample_Output.xlsx`](APA_Sample_Output.xlsx)
+
+- [`fig_01_academic_portfolio.png`](fig_01_academic_portfolio.png)
 
 *This page is generated from the README `.docx`, which remains the source of truth.*
