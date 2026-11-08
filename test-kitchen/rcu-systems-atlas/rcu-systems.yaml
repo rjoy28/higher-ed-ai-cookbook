@@ -1,0 +1,745 @@
+# RCU Systems Atlas: source catalog
+# Riverside Christian University is a fictional fixture institution.
+# Vendor and product names below are fictional except Microsoft Entra ID / M365,
+# Salesforce, and the federal and national reporting bodies.
+#
+# This file is the single source of truth. Every map, impact radius, and drift
+# report is rendered from it. Change the file, and the views change.
+#
+# Schema
+#   meta         as_of date, verification threshold, owner of this file
+#   lifecycle    ordered stages of a person's journey; one stage may mark the handoff
+#   systems      what exists: layer, owners, vendor, runs_on (platform underneath)
+#   interfaces   what moves between systems: direction, kind, method, frequency,
+#                owner, criticality, compliance, failure mode, and provenance
+#                (fact_source + last_verified)
+#   domains      which system is the record for each kind of data, by lifecycle stage
+#   scenarios    named starting points for the impact radius
+#   observations telemetry snapshots the claims are checked against (drift)
+#
+# Interface kinds: data (records move), sso (sign-in only; blocks people, not feeds)
+# Frequencies:     realtime, hourly, nightly, daily, weekly, monthly, term, annual, on-demand
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-08"
+  verify_threshold_days: 180
+  steward: Office of Data Intelligence
+  fixture: true
+
+lifecycle:
+  - {id: prospect,  name: Prospect}
+  - {id: applicant, name: Applicant}
+  - {id: admitted,  name: Admitted}
+  - {id: deposited, name: Deposited, handoff: true}
+  - {id: enrolled,  name: Enrolled}
+  - {id: graduate,  name: Graduate}
+  - {id: alum,      name: Alum}
+
+# column places each layer left to right in grouped maps, following the data flow.
+layers:
+  - {id: relationship, name: Relationship,       column: 0}
+  - {id: record,       name: Record,             column: 1}
+  - {id: identity,     name: Identity,           column: 1}
+  - {id: engagement,   name: Campus services,    column: 2}
+  - {id: analytics,    name: Analytics,          column: 3}
+  - {id: external,     name: External reporting, column: 3}
+
+systems:
+  - id: sfdc
+    name: Salesforce platform
+    short: Salesforce
+    layer: relationship
+    kind: platform
+    vendor: Salesforce
+    owner: IT Applications
+    tech_owner: IT Applications
+    summary: Platform underneath the recruitment CRM and online application.
+
+  - id: lantern
+    name: Lantern Recruit
+    short: Lantern Recruit
+    layer: relationship
+    kind: application
+    vendor: Lantern Higher Ed
+    runs_on: sfdc
+    owner: Admissions
+    tech_owner: IT Applications
+    summary: Recruitment CRM. Inquiries, outreach, events, the admissions funnel.
+
+  - id: apply
+    name: Lantern Apply
+    short: Lantern Apply
+    layer: relationship
+    kind: application
+    vendor: Lantern Higher Ed
+    runs_on: sfdc
+    owner: Admissions
+    tech_owner: IT Applications
+    summary: Online application and application review.
+
+  - id: pay
+    name: TrueLane Pay
+    short: TrueLane Pay
+    layer: record
+    kind: service
+    vendor: TrueLane Payments
+    owner: Business Office
+    tech_owner: IT Applications
+    summary: Payment gateway for application fees, deposits, and tuition.
+
+  - id: sis
+    name: Cornerstone SIS
+    short: Cornerstone SIS
+    layer: record
+    kind: application
+    vendor: Cornerstone Campus Systems
+    owner: Registrar
+    tech_owner: IT Applications
+    summary: System of record. Registration, academic records, aid, billing, degree audit.
+
+  - id: portal
+    name: MyRCU portal
+    short: MyRCU
+    layer: engagement
+    kind: application
+    vendor: Cornerstone Campus Systems
+    runs_on: sis
+    owner: Registrar
+    tech_owner: IT Applications
+    summary: Student and faculty self-service. A window into the SIS.
+
+  - id: provision
+    name: Account provisioning job
+    short: Provisioning job
+    layer: identity
+    kind: integration
+    vendor: In-house (PowerShell)
+    owner: IT Infrastructure
+    tech_owner: IT Infrastructure
+    summary: Creates and disables accounts from SIS people data.
+
+  - id: idm
+    name: Entra ID + Microsoft 365
+    short: Entra ID / M365
+    layer: identity
+    kind: platform
+    vendor: Microsoft
+    owner: IT Infrastructure
+    tech_owner: IT Infrastructure
+    summary: Identity, sign-in, email, and collaboration for everyone.
+
+  - id: lms
+    name: Commons LMS
+    short: Commons LMS
+    layer: engagement
+    kind: application
+    vendor: Commons Learning
+    owner: Academic Affairs
+    tech_owner: Instructional Technology
+    summary: Courses, assignments, and gradebooks.
+
+  - id: housing
+    name: Roost Housing
+    short: Roost Housing
+    layer: engagement
+    kind: application
+    vendor: Roost Software
+    owner: Residence Life
+    tech_owner: IT Applications
+    summary: Room selection, assignments, and housing charges.
+
+  - id: onecard
+    name: OneCard ID and door access
+    short: OneCard
+    layer: engagement
+    kind: application
+    vendor: OneCard Systems
+    owner: Campus Safety
+    tech_owner: IT Infrastructure
+    summary: ID cards and building door access.
+
+  - id: advising
+    name: Compass Advising
+    short: Compass Advising
+    layer: engagement
+    kind: application
+    vendor: Compass Student Success
+    owner: Student Success
+    tech_owner: IT Applications
+    summary: Advising notes, early alerts, and caseloads.
+
+  - id: hub
+    name: RCU Data Hub
+    short: Data Hub
+    layer: analytics
+    kind: application
+    vendor: In-house (warehouse + Power BI)
+    owner: Data Intelligence
+    tech_owner: Data Intelligence
+    summary: Warehouse and dashboards for enrollment, retention, and finance.
+
+  - id: advancement
+    name: Harvest Advancement
+    short: Harvest Advancement
+    layer: engagement
+    kind: application
+    vendor: Harvest Nonprofit Software
+    owner: Advancement
+    tech_owner: IT Applications
+    summary: Alumni relations and giving.
+
+  - id: fsa
+    name: Federal Student Aid (ISIR / COD)
+    short: Federal Student Aid
+    layer: external
+    kind: external
+    vendor: U.S. Department of Education
+    owner: Financial Aid
+    tech_owner: IT Applications
+    summary: Aid eligibility records in, disbursement records out.
+
+  - id: nsc
+    name: National Student Clearinghouse
+    short: Clearinghouse
+    layer: external
+    kind: external
+    vendor: National Student Clearinghouse
+    owner: Registrar
+    tech_owner: IT Applications
+    summary: Enrollment and degree verification reporting.
+
+  - id: ipeds
+    name: IPEDS (NCES)
+    short: IPEDS
+    layer: external
+    kind: external
+    vendor: National Center for Education Statistics
+    owner: Institutional Research
+    tech_owner: Data Intelligence
+    summary: Required federal surveys.
+
+interfaces:
+  - id: if-01
+    name: Admit and deposit handoff
+    from: lantern
+    to: sis
+    kind: data
+    carries: [person, application decision, deposit]
+    method: Vendor API connector
+    frequency: nightly
+    trigger: Admitted and deposit paid; nightly sweep catches stragglers
+    owner: Admissions
+    criticality: high
+    failure_mode: Admitted students never reach the SIS, so they can't register or get accounts.
+    fact_source: SIS import job log
+    last_verified: "2026-09-14"
+
+  - id: if-02
+    name: Submitted applications
+    from: apply
+    to: lantern
+    kind: data
+    carries: [application, documents]
+    method: Native platform object
+    frequency: realtime
+    owner: Admissions
+    criticality: high
+    failure_mode: Applications sit outside the funnel; no review queue.
+    fact_source: Platform audit trail
+    last_verified: "2026-08-02"
+
+  - id: if-03
+    name: Application fees and deposits
+    from: pay
+    to: lantern
+    kind: data
+    carries: [payment, deposit]
+    method: Webhook
+    frequency: realtime
+    owner: Business Office
+    criticality: high
+    failure_mode: Deposits go unrecorded, so the handoff to the SIS never fires.
+    fact_source: Gateway settlement report
+    last_verified: "2025-11-20"
+
+  - id: if-04
+    name: Funnel extract
+    from: lantern
+    to: hub
+    kind: data
+    carries: [inquiries, applications, funnel stage]
+    method: ETL
+    frequency: nightly
+    owner: Data Intelligence
+    criticality: medium
+    failure_mode: Enrollment forecasts and funnel dashboards go stale.
+    fact_source: ETL run log
+    last_verified: "2026-10-01"
+
+  - id: if-05
+    name: People feed for accounts
+    from: sis
+    to: provision
+    kind: data
+    carries: [person, role, status]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: New students and staff get no accounts; departed people keep access.
+    fact_source: Provisioning job log
+    last_verified: "2026-10-20"
+
+  - id: if-06
+    name: Account create and disable
+    from: provision
+    to: idm
+    kind: data
+    carries: [account, group membership]
+    method: Microsoft Graph API
+    frequency: nightly
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: Accounts are not created or not disabled.
+    fact_source: Entra ID audit log
+    last_verified: "2026-10-20"
+
+  - id: if-07
+    name: Staff sign-in to recruitment CRM
+    from: idm
+    to: lantern
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: Admissions staff can't sign in.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-08
+    name: Portal sign-in
+    from: idm
+    to: portal
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: Students and faculty can't reach self-service.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-09
+    name: LMS sign-in
+    from: idm
+    to: lms
+    kind: sso
+    carries: [sign-in]
+    method: OIDC
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: No one can reach courses.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-10
+    name: Advising sign-in
+    from: idm
+    to: advising
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: medium
+    failure_mode: Advisors can't sign in.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2025-12-01"
+
+  - id: if-11
+    name: Housing sign-in
+    from: idm
+    to: housing
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: medium
+    failure_mode: Students can't select rooms; staff can't manage assignments.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-12
+    name: Rosters and enrollments
+    from: sis
+    to: lms
+    kind: data
+    carries: [person, enrollment, section]
+    method: Vendor API
+    frequency: hourly
+    owner: Instructional Technology
+    criticality: high
+    failure_mode: Students missing from courses; drops still enrolled.
+    fact_source: LMS sync log
+    last_verified: "2026-09-02"
+
+  - id: if-13
+    name: Final grades
+    from: lms
+    to: sis
+    kind: data
+    carries: [final grade]
+    method: Grade passback
+    frequency: term
+    owner: Registrar
+    criticality: high
+    compliance: [FERPA]
+    failure_mode: Grades of record are late or wrong on transcripts.
+    fact_source: Registrar grade audit
+    last_verified: "2026-05-20"
+
+  - id: if-14
+    name: Student self-service
+    from: sis
+    to: portal
+    kind: data
+    carries: [schedule, grades, account balance, aid]
+    method: Native module
+    frequency: realtime
+    owner: Registrar
+    criticality: high
+    compliance: [FERPA]
+    failure_mode: Students see stale or missing records.
+    fact_source: Portal health check
+    last_verified: "2026-08-15"
+
+  - id: if-15
+    name: Tuition payments
+    from: pay
+    to: sis
+    kind: data
+    carries: [payment]
+    method: Vendor API
+    frequency: realtime
+    owner: Business Office
+    criticality: high
+    failure_mode: Payments don't post; holds and late fees fire in error.
+    fact_source: Gateway settlement report
+    last_verified: "2026-07-10"
+
+  - id: if-16
+    name: ISIR import
+    from: fsa
+    to: sis
+    kind: data
+    carries: [aid eligibility]
+    method: SAIG file transfer
+    frequency: daily
+    owner: Financial Aid
+    criticality: high
+    compliance: [Title IV]
+    failure_mode: Aid packaging stalls; verification deadlines slip.
+    fact_source: SAIG mailbox log
+    last_verified: "2026-10-05"
+
+  - id: if-17
+    name: COD disbursements
+    from: sis
+    to: fsa
+    kind: data
+    carries: [disbursement]
+    method: SAIG file transfer
+    frequency: weekly
+    owner: Financial Aid
+    criticality: high
+    compliance: [Title IV]
+    failure_mode: Disbursement reporting is late, a program review finding.
+    fact_source: COD acknowledgment files
+    last_verified: "2026-10-05"
+
+  - id: if-18
+    name: Enrollment reporting
+    from: sis
+    to: nsc
+    kind: data
+    carries: [enrollment status]
+    method: Flat file upload
+    frequency: monthly
+    owner: Registrar
+    criticality: high
+    compliance: [Title IV]
+    failure_mode: Loan servicers see wrong status; borrowers enter repayment early.
+    fact_source: Clearinghouse error reports
+    last_verified: "2026-09-30"
+
+  - id: if-19
+    name: IPEDS surveys
+    from: sis
+    to: ipeds
+    kind: data
+    carries: [enrollment, completions, finance]
+    method: Manual export and entry
+    frequency: annual
+    owner: Institutional Research
+    criticality: medium
+    compliance: [IPEDS]
+    failure_mode: Late or inaccurate federal reporting.
+    fact_source: Keyholder submission record
+    last_verified: "2026-02-15"
+
+  - id: if-20
+    name: Records extract
+    from: sis
+    to: hub
+    kind: data
+    carries: [enrollment, grades, finance]
+    method: ETL
+    frequency: nightly
+    owner: Data Intelligence
+    criticality: medium
+    failure_mode: Retention and finance dashboards go stale.
+    fact_source: ETL run log
+    last_verified: "2026-10-01"
+
+  - id: if-21
+    name: Eligible residents
+    from: sis
+    to: housing
+    kind: data
+    carries: [person, enrollment status]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Residence Life
+    criticality: medium
+    failure_mode: Eligible students can't select rooms.
+    fact_source: Housing import log
+    last_verified: "2026-08-01"
+
+  - id: if-22
+    name: Room and board charges
+    from: housing
+    to: sis
+    kind: data
+    carries: [charges]
+    method: Flat file (SFTP)
+    frequency: weekly
+    owner: Business Office
+    criticality: high
+    failure_mode: Housing charges missing from student bills.
+    fact_source: Business Office charge reconciliation
+    last_verified: "2026-03-01"
+
+  - id: if-23
+    name: Active status for ID cards
+    from: sis
+    to: onecard
+    kind: data
+    carries: [person, active status, photo]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Campus Safety
+    criticality: medium
+    failure_mode: New students can't get cards; withdrawn students keep them.
+    fact_source: OneCard import log
+    last_verified: "2026-07-15"
+
+  - id: if-24
+    name: Door access by room
+    from: housing
+    to: onecard
+    kind: data
+    carries: [room assignment]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Campus Safety
+    criticality: high
+    failure_mode: Students locked out of their halls, or still able to enter old ones.
+    fact_source: OneCard import log
+    last_verified: "2025-09-10"
+
+  - id: if-25
+    name: Rosters and midterm grades
+    from: sis
+    to: advising
+    kind: data
+    carries: [person, enrollment, midterm grade]
+    method: Vendor API
+    frequency: daily
+    owner: Student Success
+    criticality: medium
+    failure_mode: Early alerts miss struggling students.
+    fact_source: Advising sync log
+    last_verified: "2026-09-01"
+
+  - id: if-26
+    name: Graduates at conferral
+    from: sis
+    to: advancement
+    kind: data
+    carries: [person, degree, contact]
+    method: Flat file
+    frequency: term
+    owner: Advancement
+    criticality: medium
+    failure_mode: New alumni never enter the alumni record.
+    fact_source: Advancement load report
+    last_verified: "2026-05-30"
+
+  - id: if-27
+    name: Admit profile for early alerts
+    from: lantern
+    to: advising
+    kind: data
+    carries: [first-generation flag, high school GPA, intended major]
+    method: ETL
+    frequency: nightly
+    owner: Student Success
+    criticality: medium
+    failure_mode: First-year risk models start the term blind.
+    fact_source: Advising sync log
+    last_verified: "2026-04-10"
+
+  - id: if-28
+    name: Deposited students for housing
+    from: lantern
+    to: housing
+    kind: data
+    carries: [person, deposit, housing preference]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Residence Life
+    criticality: medium
+    failure_mode: New students can't pre-select rooms before they reach the SIS.
+    fact_source: Housing import log
+    last_verified: "2025-06-01"
+
+domains:
+  - id: contact
+    name: Name and contact
+    record:
+      - {system: lantern,     stages: [prospect, applicant, admitted]}
+      - {system: sis,         stages: [deposited, enrolled, graduate]}
+      - {system: advancement, stages: [alum]}
+
+  - id: comms
+    name: Communications history
+    record:
+      - {system: lantern,     stages: [prospect, applicant, admitted, deposited]}
+      - {system: advancement, stages: [alum]}
+
+  - id: application
+    name: Application and decision
+    record:
+      - {system: lantern, stages: [applicant, admitted]}
+      - {system: sis,     stages: [deposited, enrolled, graduate, alum]}
+
+  - id: account
+    name: Deposits and student account
+    record:
+      - {system: lantern, stages: [admitted, deposited]}
+      - {system: sis,     stages: [deposited, enrolled, graduate]}
+
+  - id: aid
+    name: Financial aid
+    record:
+      - {system: sis, stages: [admitted, deposited, enrolled]}
+
+  - id: registration
+    name: Registration
+    record:
+      - {system: sis, stages: [enrolled]}
+
+  - id: academic
+    name: Academic record
+    record:
+      - {system: sis, stages: [enrolled, graduate, alum]}
+
+  - id: housing
+    name: Housing assignment
+    record:
+      - {system: housing, stages: [deposited, enrolled]}
+
+  - id: coursework
+    name: Course activity
+    note: Grades of record live in the SIS.
+    record:
+      - {system: lms, stages: [enrolled]}
+
+  - id: advising
+    name: Advising notes and alerts
+    record:
+      - {system: advising, stages: [enrolled]}
+
+  - id: signin
+    name: Sign-in account
+    record:
+      - {system: idm, stages: [deposited, enrolled, graduate]}
+
+  - id: giving
+    name: Giving and engagement
+    record:
+      - {system: advancement, stages: [graduate, alum]}
+
+scenarios:
+  - id: crm-swap
+    system: lantern
+    name: Replace the recruitment CRM
+  - id: identity-outage
+    system: idm
+    name: Identity platform outage
+  - id: housing-upgrade
+    system: housing
+    name: Housing system upgrade
+  - id: platform-release
+    system: sfdc
+    name: Salesforce platform release
+
+# Simulated telemetry for the fixture. In production, each block is an export
+# from the named fact source, captured on the stated date.
+observations:
+  sso_apps:
+    fact_source: Entra ID enterprise applications export
+    captured: "2026-11-07"
+    items:
+      - {app: Lantern Recruit,   interface: if-07}
+      - {app: MyRCU,             interface: if-08}
+      - {app: Commons LMS,       interface: if-09}
+      - {app: Roost Housing,     interface: if-11}
+      - {app: FormFlow Surveys,  interface: null}
+      - {app: Huddle Scheduling, interface: null}
+
+  job_runs:
+    fact_source: Integration scheduler and job logs
+    captured: "2026-11-08"
+    items:
+      - {job: lantern_sis_handoff,   interface: if-01, last_success: "2026-11-08"}
+      - {job: lantern_hub_etl,       interface: if-04, last_success: "2026-11-07"}
+      - {job: sis_people_export,     interface: if-05, last_success: "2026-11-08"}
+      - {job: graph_provisioning,    interface: if-06, last_success: "2026-11-08"}
+      - {job: sis_lms_roster_sync,   interface: if-12, last_success: "2026-11-08"}
+      - {job: saig_isir_pull,        interface: if-16, last_success: "2026-11-07"}
+      - {job: sis_hub_etl,           interface: if-20, last_success: "2026-11-07"}
+      - {job: sis_housing_export,    interface: if-21, last_success: "2026-11-07"}
+      - {job: sis_onecard_export,    interface: if-23, last_success: "2026-11-08"}
+      - {job: housing_onecard_doors, interface: if-24, last_success: "2026-10-16"}
+      - {job: sis_advising_sync,     interface: if-25, last_success: "2026-11-08"}
+      - {job: lantern_housing_feed,  interface: if-28, last_success: "2025-08-15"}
+      - {job: advising_sis_writeback, interface: null, last_success: "2026-11-07", note: Writes advisor assignments back into the SIS}
+
+  contracts:
+    fact_source: Contract register
+    captured: "2026-11-01"
+    items:
+      - {system: lantern,  owner_of_record: Admissions}
+      - {system: pay,      owner_of_record: Business Office}
+      - {system: housing,  owner_of_record: Residence Life}
+      - {system: onecard,  owner_of_record: Campus Safety}
+      - {system: advising, owner_of_record: Academic Affairs}
+      - {system: lms,      owner_of_record: Academic Affairs}

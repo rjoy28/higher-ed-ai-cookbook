@@ -8,3 +8,4 @@ Principles that hold across recipes. Each pattern gets its own file: what it is,
 | [`/help` fallback](help-fallback.md) | Every agent can explain itself and point to a human. |
 | [Anti-suppression](anti-suppression.md) | A system that needs opacity to survive is showing its fragility. |
 | [Fact source per control axis](fact-source-per-control-axis.md) | Every risk axis names the evidence that answers it. |
+| [One source, many views](one-source-many-views.md) | One source of systems and interfaces renders every map on demand. |
