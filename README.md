@@ -50,4 +50,6 @@ All sample data describes **Riverside Christian University (RCU)**, a fictional 
 
 ## License
 
-The writing, templates and sample data are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Any code is licensed under MIT. See [LICENSE.md](LICENSE.md).
+The writing, templates and sample data are licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): free to use and adapt for noncommercial purposes, including at your own institution, with credit, and with adaptations shared under the same terms. Any code is licensed under MIT. See [LICENSE.md](LICENSE.md).
+
+Commercial, white-label or resale rights are available separately. Contact the Cookbook.
