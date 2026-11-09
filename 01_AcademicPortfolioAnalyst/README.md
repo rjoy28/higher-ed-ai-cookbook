@@ -80,7 +80,7 @@ If you're holding this recipe with no author in the room, here's the orientation
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. Before you trust this agent with a real decision, find a competent human — an IR analyst, provost, or accreditation-fluent colleague — and have them check the read against your institution's reality. An orphaned agent should point you at a person, not at itself.
 
-License: free to use and adapt for your own institution. White-label / resale rights are separate — contact the Cookbook. Build 2026-07. Sample data is fictional.
+License: CC BY-NC-SA 4.0. Free to use and adapt for noncommercial purposes, including at your own institution. Commercial / white-label rights: contact the Cookbook. Build 2026-07. Sample data is fictional.
 
 ## Sample output
 
