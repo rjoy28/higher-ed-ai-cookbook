@@ -54,6 +54,8 @@ p { margin: 0; }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .tab:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.filterbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 20px; padding: 14px 0 0; }
+.filterbar .sub { color: var(--muted); font-size: 0.86rem; max-width: 52ch; }
 .panel { padding-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
 
 /* Controls */
@@ -90,6 +92,7 @@ select { font: 1rem var(--f-body); color: var(--ink); background: var(--surface)
 .edge.hosted { stroke-dasharray: 2 4; stroke-width: 2; }
 .edge.stale { stroke: var(--warn); }
 .edge.drift { stroke: var(--crit); }
+.edge.dim, .node.dim { opacity: 0.18; }
 .mk-muted { fill: var(--muted); } .mk-warn { fill: var(--warn); } .mk-crit { fill: var(--crit); }
 .node rect { stroke-width: 2; }
 .node text { font: 600 13px var(--f-body); fill: var(--ink); }
@@ -179,6 +182,14 @@ textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); col
     <button class="tab" role="tab" id="tab-source" aria-controls="source" data-view="source">Source</button>
   </div>
 
+  <div class="filterbar" id="filterbar">
+    <div class="field">
+      <label id="flag-label">Regulatory flags</label>
+      <div class="presets" id="flags" role="group" aria-labelledby="flag-label"></div>
+    </div>
+    <p class="sub" id="flag-hint">Narrows the links in Impact radius and Drift, and the systems list in Ownership. The radius itself doesn't change.</p>
+  </div>
+
   <section class="panel" role="tabpanel" id="impact" aria-labelledby="tab-impact">
     <div class="controls">
       <div class="field">
@@ -220,10 +231,14 @@ textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); col
       <h2>System of record, by stage</h2>
       <p>Which system holds the official version of each kind of data as a person moves through RCU. Two systems claiming the same stage is a conflict. A stage with no record between two that have one is a gap.</p>
     </div>
+    <div class="field">
+      <label id="life-label">Lifecycle</label>
+      <div class="presets" id="lifecycles" role="group" aria-labelledby="life-label"></div>
+    </div>
     <div class="stats" id="own-stats"></div>
     <div class="tablebox"><table class="matrix" id="matrix"></table></div>
     <div class="legend" id="layer-legend"></div>
-    <div class="section-head"><h2>Systems</h2></div>
+    <div class="section-head"><h2>Systems</h2><p id="systems-note">Sign-in shows how people get in. Applications with no sign-in path on record also appear in the drift report.</p></div>
     <div class="tablebox"><table id="systems-table"></table></div>
   </section>
 
@@ -250,10 +265,12 @@ textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); col
     <div class="two">
       <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-systems.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
       <dl class="schema">
-        <dt>systems</dt><dd>What exists. Layer, owners, vendor, and runs_on for the platform underneath.</dd>
-        <dt>interfaces</dt><dd>What moves. Direction, kind (data or sso), method, frequency, owner, criticality, compliance, failure mode.</dd>
-        <dt>fact_source + last_verified</dt><dd>Provenance on every interface. Where the claim can be checked, and when someone last checked it.</dd>
-        <dt>domains</dt><dd>System of record for each kind of data, by lifecycle stage.</dd>
+        <dt>lifecycles</dt><dd>One track of stages per kind of person: student and employee.</dd>
+        <dt>systems</dt><dd>What exists. Layer, owners, vendor, runs_on for the platform underneath, and signin when people get in some way other than SSO.</dd>
+        <dt>interfaces</dt><dd>What moves between a pair of systems. Kind (data or sso), method, frequency, owner, criticality, compliance, failure mode.</dd>
+        <dt>carries</dt><dd>The fields on an interface. Each flows from → to unless it sets flow: back or flow: both, and can carry its own frequency, compliance and provenance.</dd>
+        <dt>fact_source + last_verified</dt><dd>Provenance on every interface, field override and sign-in fact. Where the claim can be checked, and when someone last checked it.</dd>
+        <dt>domains</dt><dd>System of record for each kind of data, by lifecycle stage. Domains name their lifecycle.</dd>
         <dt>observations</dt><dd>Telemetry snapshots the claims are checked against. Each names its fact source and capture date.</dd>
         <dt>scenarios</dt><dd>Named starting points for the impact radius.</dd>
       </dl>
@@ -272,17 +289,31 @@ textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); col
 #
 # Schema
 #   meta         as_of date, verification threshold, owner of this file
-#   lifecycle    ordered stages of a person's journey; one stage may mark the handoff
-#   systems      what exists: layer, owners, vendor, runs_on (platform underneath)
-#   interfaces   what moves between systems: direction, kind, method, frequency,
-#                owner, criticality, compliance, failure mode, and provenance
-#                (fact_source + last_verified)
+#   lifecycles   one ordered track of stages per kind of person (student, employee);
+#                one stage per track may mark the handoff
+#   systems      what exists: layer, owners, vendor, runs_on (platform underneath),
+#                and signin when people reach it some way other than an sso interface
+#   interfaces   what moves between a pair of systems: kind, method, frequency, owner,
+#                criticality, compliance, failure mode, and provenance
+#                (fact_source + last_verified). One interface per pair.
 #   domains      which system is the record for each kind of data, by lifecycle stage
 #   scenarios    named starting points for the impact radius
 #   observations telemetry snapshots the claims are checked against (drift)
 #
 # Interface kinds: data (records move), sso (sign-in only; blocks people, not feeds)
 # Frequencies:     realtime, hourly, nightly, daily, weekly, monthly, term, annual, on-demand
+# Compliance:      FERPA, GLBA, Title IV, IPEDS. Filterable in every view.
+#
+# Fields (carries) flow from -> to by default. A field written as a mapping can
+# set flow: back (to -> from) or flow: both, and override frequency, method,
+# compliance, fact_source and last_verified for that field only:
+#   carries:
+#     - enrollment
+#     - {field: final grade, flow: back, frequency: term, compliance: [FERPA]}
+#
+# Sign-in (systems.signin): record how people get in when it isn't an sso
+# interface. method: local | self-registration | none. Applications and services
+# with neither an sso interface nor a signin fact show up in the drift report.
 
 meta:
   institution: Riverside Christian University
@@ -292,14 +323,24 @@ meta:
   steward: Office of Data Intelligence
   fixture: true
 
-lifecycle:
-  - {id: prospect,  name: Prospect}
-  - {id: applicant, name: Applicant}
-  - {id: admitted,  name: Admitted}
-  - {id: deposited, name: Deposited, handoff: true}
-  - {id: enrolled,  name: Enrolled}
-  - {id: graduate,  name: Graduate}
-  - {id: alum,      name: Alum}
+lifecycles:
+  - id: student
+    name: Student
+    stages:
+      - {id: prospect,  name: Prospect}
+      - {id: applicant, name: Applicant}
+      - {id: admitted,  name: Admitted}
+      - {id: deposited, name: Deposited, handoff: true}
+      - {id: enrolled,  name: Enrolled}
+      - {id: graduate,  name: Graduate}
+      - {id: alum,      name: Alum}
+  - id: employee
+    name: Employee
+    stages:
+      - {id: candidate, name: Candidate}
+      - {id: hired,     name: Offer accepted, handoff: true}
+      - {id: active,    name: Active}
+      - {id: separated, name: Separated}
 
 # column places each layer left to right in grouped maps, following the data flow.
 layers:
@@ -342,6 +383,21 @@ systems:
     owner: Admissions
     tech_owner: IT Applications
     summary: Online application and application review.
+    signin:
+      method: self-registration
+      note: Applicants create their own accounts. Staff review applications inside Lantern Recruit.
+      fact_source: Platform login settings
+      last_verified: "2026-08-02"
+
+  - id: ats
+    name: Beacon Hire
+    short: Beacon Hire
+    layer: relationship
+    kind: application
+    vendor: Beacon Talent
+    owner: Human Resources
+    tech_owner: IT Applications
+    summary: Job postings, candidates, interviews, and offers.
 
   - id: pay
     name: TrueLane Pay
@@ -352,6 +408,11 @@ systems:
     owner: Business Office
     tech_owner: IT Applications
     summary: Payment gateway for application fees, deposits, and tuition.
+    signin:
+      method: local
+      note: Business Office staff use passwords in the vendor portal. Removed by hand at separation.
+      fact_source: Gateway portal user list
+      last_verified: "2026-07-10"
 
   - id: sis
     name: Cornerstone SIS
@@ -362,6 +423,21 @@ systems:
     owner: Registrar
     tech_owner: IT Applications
     summary: System of record. Registration, academic records, aid, billing, degree audit.
+    signin:
+      method: local
+      note: Staff use separate passwords in the SIS desktop client. Students and faculty come in through MyRCU.
+      fact_source: SIS security user list
+      last_verified: "2026-08-04"
+
+  - id: hr
+    name: Keystone HR and Payroll
+    short: Keystone HR
+    layer: record
+    kind: application
+    vendor: Keystone Workforce
+    owner: Human Resources
+    tech_owner: IT Applications
+    summary: System of record for employees. Positions, supervisors, pay, benefits, separations.
 
   - id: portal
     name: MyRCU portal
@@ -382,7 +458,7 @@ systems:
     vendor: In-house (PowerShell)
     owner: IT Infrastructure
     tech_owner: IT Infrastructure
-    summary: Creates and disables accounts from SIS people data.
+    summary: Creates and disables accounts from SIS student data and HR employee data.
 
   - id: idm
     name: Entra ID + Microsoft 365
@@ -453,6 +529,11 @@ systems:
     owner: Advancement
     tech_owner: IT Applications
     summary: Alumni relations and giving.
+    signin:
+      method: local
+      note: Separate passwords, removed by hand. The spring review found two retired gift officers still active.
+      fact_source: Harvest user list
+      last_verified: "2026-06-15"
 
   - id: fsa
     name: Federal Student Aid (ISIR / COD)
@@ -490,7 +571,10 @@ interfaces:
     from: lantern
     to: sis
     kind: data
-    carries: [person, application decision, deposit]
+    carries:
+      - person
+      - application decision
+      - {field: deposit, compliance: [GLBA]}
     method: Vendor API connector
     frequency: nightly
     trigger: Admitted and deposit paid; nightly sweep catches stragglers
@@ -524,6 +608,7 @@ interfaces:
     frequency: realtime
     owner: Business Office
     criticality: high
+    compliance: [GLBA]
     failure_mode: Deposits go unrecorded, so the handoff to the SIS never fires.
     fact_source: Gateway settlement report
     last_verified: "2025-11-20"
@@ -543,16 +628,16 @@ interfaces:
     last_verified: "2026-10-01"
 
   - id: if-05
-    name: People feed for accounts
+    name: Student feed for accounts
     from: sis
     to: provision
     kind: data
-    carries: [person, role, status]
+    carries: [person, enrollment status]
     method: Flat file (SFTP)
     frequency: nightly
     owner: IT Infrastructure
     criticality: high
-    failure_mode: New students and staff get no accounts; departed people keep access.
+    failure_mode: New students get no accounts; withdrawn students keep access.
     fact_source: Provisioning job log
     last_verified: "2026-10-20"
 
@@ -641,40 +726,39 @@ interfaces:
     last_verified: "2026-06-30"
 
   - id: if-12
-    name: Rosters and enrollments
+    name: Rosters out, final grades back
     from: sis
     to: lms
     kind: data
-    carries: [person, enrollment, section]
+    carries:
+      - person
+      - enrollment
+      - section
+      - field: final grade
+        flow: back
+        method: Grade passback
+        frequency: term
+        fact_source: Registrar grade audit
+        last_verified: "2026-05-20"
     method: Vendor API
     frequency: hourly
     owner: Instructional Technology
     criticality: high
-    failure_mode: Students missing from courses; drops still enrolled.
+    compliance: [FERPA]
+    failure_mode: Students missing from courses or drops still enrolled; grades of record late or wrong on transcripts.
     fact_source: LMS sync log
     last_verified: "2026-09-02"
-
-  - id: if-13
-    name: Final grades
-    from: lms
-    to: sis
-    kind: data
-    carries: [final grade]
-    method: Grade passback
-    frequency: term
-    owner: Registrar
-    criticality: high
-    compliance: [FERPA]
-    failure_mode: Grades of record are late or wrong on transcripts.
-    fact_source: Registrar grade audit
-    last_verified: "2026-05-20"
 
   - id: if-14
     name: Student self-service
     from: sis
     to: portal
     kind: data
-    carries: [schedule, grades, account balance, aid]
+    carries:
+      - schedule
+      - grades
+      - {field: account balance, compliance: [GLBA]}
+      - {field: aid, compliance: [GLBA, Title IV]}
     method: Native module
     frequency: realtime
     owner: Registrar
@@ -694,38 +778,30 @@ interfaces:
     frequency: realtime
     owner: Business Office
     criticality: high
+    compliance: [GLBA]
     failure_mode: Payments don't post; holds and late fees fire in error.
     fact_source: Gateway settlement report
     last_verified: "2026-07-10"
 
   - id: if-16
-    name: ISIR import
+    name: Federal aid exchange (ISIR in, COD out)
     from: fsa
     to: sis
     kind: data
-    carries: [aid eligibility]
+    carries:
+      - aid eligibility
+      - field: disbursement
+        flow: back
+        frequency: weekly
+        fact_source: COD acknowledgment files
+        last_verified: "2026-10-05"
     method: SAIG file transfer
     frequency: daily
     owner: Financial Aid
     criticality: high
-    compliance: [Title IV]
-    failure_mode: Aid packaging stalls; verification deadlines slip.
+    compliance: [Title IV, GLBA]
+    failure_mode: Aid packaging stalls and verification deadlines slip; late disbursement reporting is a program review finding.
     fact_source: SAIG mailbox log
-    last_verified: "2026-10-05"
-
-  - id: if-17
-    name: COD disbursements
-    from: sis
-    to: fsa
-    kind: data
-    carries: [disbursement]
-    method: SAIG file transfer
-    frequency: weekly
-    owner: Financial Aid
-    criticality: high
-    compliance: [Title IV]
-    failure_mode: Disbursement reporting is late, a program review finding.
-    fact_source: COD acknowledgment files
     last_verified: "2026-10-05"
 
   - id: if-18
@@ -763,42 +839,40 @@ interfaces:
     from: sis
     to: hub
     kind: data
-    carries: [enrollment, grades, finance]
+    carries:
+      - enrollment
+      - grades
+      - {field: finance, compliance: [GLBA]}
     method: ETL
     frequency: nightly
     owner: Data Intelligence
     criticality: medium
+    compliance: [FERPA]
     failure_mode: Retention and finance dashboards go stale.
     fact_source: ETL run log
     last_verified: "2026-10-01"
 
   - id: if-21
-    name: Eligible residents
+    name: Eligible residents out, room charges back
     from: sis
     to: housing
     kind: data
-    carries: [person, enrollment status]
+    carries:
+      - person
+      - enrollment status
+      - field: room and board charges
+        flow: back
+        frequency: weekly
+        compliance: [GLBA]
+        fact_source: Business Office charge reconciliation
+        last_verified: "2026-03-01"
     method: Flat file (SFTP)
     frequency: nightly
     owner: Residence Life
-    criticality: medium
-    failure_mode: Eligible students can't select rooms.
+    criticality: high
+    failure_mode: Eligible students can't select rooms; housing charges go missing from student bills.
     fact_source: Housing import log
     last_verified: "2026-08-01"
-
-  - id: if-22
-    name: Room and board charges
-    from: housing
-    to: sis
-    kind: data
-    carries: [charges]
-    method: Flat file (SFTP)
-    frequency: weekly
-    owner: Business Office
-    criticality: high
-    failure_mode: Housing charges missing from student bills.
-    fact_source: Business Office charge reconciliation
-    last_verified: "2026-03-01"
 
   - id: if-23
     name: Active status for ID cards
@@ -838,6 +912,7 @@ interfaces:
     frequency: daily
     owner: Student Success
     criticality: medium
+    compliance: [FERPA]
     failure_mode: Early alerts miss struggling students.
     fact_source: Advising sync log
     last_verified: "2026-09-01"
@@ -883,6 +958,119 @@ interfaces:
     failure_mode: New students can't pre-select rooms before they reach the SIS.
     fact_source: Housing import log
     last_verified: "2025-06-01"
+
+  - id: if-29
+    name: Data Hub sign-in
+    from: idm
+    to: hub
+    kind: sso
+    carries: [sign-in]
+    method: OIDC (native to Power BI)
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: medium
+    failure_mode: Dashboards unreachable.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-30
+    name: Offer accepted handoff
+    from: ats
+    to: hr
+    kind: data
+    carries: [person, position, start date, offer]
+    method: Vendor API
+    frequency: daily
+    trigger: Offer accepted and background check cleared
+    owner: Human Resources
+    criticality: high
+    failure_mode: New hires never reach HR, so no pay, no accounts, no ID card on day one.
+    fact_source: HR import log
+    last_verified: "2026-08-20"
+
+  - id: if-31
+    name: Employee feed for accounts
+    from: hr
+    to: provision
+    kind: data
+    carries: [person, position, department, employment status]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: New hires start without accounts; separated employees keep access.
+    fact_source: Provisioning job log
+    last_verified: "2026-10-20"
+
+  - id: if-32
+    name: Employee status for ID cards
+    from: hr
+    to: onecard
+    kind: data
+    carries: [person, employment status, department]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Campus Safety
+    criticality: high
+    failure_mode: Separated employees keep door access; new hires wait for cards.
+    fact_source: OneCard import log
+    last_verified: "2025-10-02"
+
+  - id: if-33
+    name: Faculty appointments
+    from: hr
+    to: sis
+    kind: data
+    carries: [person, faculty appointment, department]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Registrar
+    criticality: medium
+    failure_mode: New faculty can't be assigned sections, so LMS courses open with no instructor.
+    fact_source: SIS import job log
+    last_verified: "2026-08-25"
+
+  - id: if-34
+    name: Workforce extract
+    from: hr
+    to: hub
+    kind: data
+    carries: [position, department, FTE, salary]
+    method: ETL
+    frequency: nightly
+    owner: Data Intelligence
+    criticality: medium
+    failure_mode: Staffing, budget, and IPEDS HR survey figures go stale.
+    fact_source: ETL run log
+    last_verified: "2026-10-01"
+
+  - id: if-35
+    name: Hiring manager sign-in
+    from: idm
+    to: ats
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: medium
+    failure_mode: Hiring managers can't review candidates. Candidates use their own accounts.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-36
+    name: HR and payroll sign-in
+    from: idm
+    to: hr
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: Employees can't see pay stubs or benefits; HR can't process changes.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
 
 domains:
   - id: contact
@@ -951,6 +1139,53 @@ domains:
     record:
       - {system: advancement, stages: [graduate, alum]}
 
+  # Employee lifecycle. Domains default to the student track unless they name another.
+  - id: emp-candidate
+    lifecycle: employee
+    name: Application and offer
+    record:
+      - {system: ats, stages: [candidate, hired]}
+
+  - id: emp-contact
+    lifecycle: employee
+    name: Name and contact
+    record:
+      - {system: ats, stages: [candidate]}
+      - {system: hr,  stages: [hired, active, separated]}
+
+  - id: emp-position
+    lifecycle: employee
+    name: Position and pay
+    record:
+      - {system: hr, stages: [hired, active, separated]}
+
+  - id: emp-supervisor
+    lifecycle: employee
+    name: Supervisor and department
+    note: The help desk hand-edits the manager field in Entra ID because the employee feed doesn't carry it.
+    record:
+      - {system: hr,  stages: [hired, active]}
+      - {system: idm, stages: [active]}
+
+  - id: emp-teaching
+    lifecycle: employee
+    name: Teaching assignments
+    note: Faculty only.
+    record:
+      - {system: sis, stages: [active]}
+
+  - id: emp-signin
+    lifecycle: employee
+    name: Sign-in account
+    record:
+      - {system: idm, stages: [hired, active]}
+
+  - id: emp-access
+    lifecycle: employee
+    name: ID card and door access
+    record:
+      - {system: onecard, stages: [hired, active]}
+
 scenarios:
   - id: crm-swap
     system: lantern
@@ -964,6 +1199,9 @@ scenarios:
   - id: platform-release
     system: sfdc
     name: Salesforce platform release
+  - id: hr-swap
+    system: hr
+    name: Replace the HR system
 
 # Simulated telemetry for the fixture. In production, each block is an export
 # from the named fact source, captured on the stated date.
@@ -976,6 +1214,9 @@ observations:
       - {app: MyRCU,             interface: if-08}
       - {app: Commons LMS,       interface: if-09}
       - {app: Roost Housing,     interface: if-11}
+      - {app: Power BI,          interface: if-29}
+      - {app: Beacon Hire,       interface: if-35}
+      - {app: Keystone HR,       interface: if-36}
       - {app: FormFlow Surveys,  interface: null}
       - {app: Huddle Scheduling, interface: null}
 
@@ -996,6 +1237,12 @@ observations:
       - {job: sis_advising_sync,     interface: if-25, last_success: "2026-11-08"}
       - {job: lantern_housing_feed,  interface: if-28, last_success: "2025-08-15"}
       - {job: advising_sis_writeback, interface: null, last_success: "2026-11-07", note: Writes advisor assignments back into the SIS}
+      - {job: beacon_keystone_hires,  interface: if-30, last_success: "2026-11-07"}
+      - {job: hr_people_export,       interface: if-31, last_success: "2026-11-08"}
+      - {job: hr_onecard_export,      interface: if-32, last_success: "2026-11-08"}
+      - {job: hr_sis_faculty,         interface: if-33, last_success: "2026-11-08"}
+      - {job: hr_hub_etl,             interface: if-34, last_success: "2026-11-07"}
+      - {job: cod_disbursement_send,  interface: if-16, field: disbursement, last_success: "2026-10-09"}
 
   contracts:
     fact_source: Contract register
@@ -1007,6 +1254,8 @@ observations:
       - {system: onecard,  owner_of_record: Campus Safety}
       - {system: advising, owner_of_record: Academic Affairs}
       - {system: lms,      owner_of_record: Academic Affairs}
+      - {system: ats,      owner_of_record: Human Resources}
+      - {system: hr,       owner_of_record: Human Resources}
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script>
@@ -1026,8 +1275,13 @@ observations:
   let M = null;
   let currentSystem = null;
   let layout = "grouped";
+  let currentLife = null;
 
   // ---------- Model ----------
+  const FLOWS = ["forward", "back", "both"];
+  const SIGNIN = { local: "Local accounts", "self-registration": "Self-registration", none: "No interactive sign-in" };
+  const PEOPLE_FACING = new Set(["application", "service"]);
+
   function build(text) {
     const doc = jsyaml.load(text);
     const errs = [];
@@ -1040,9 +1294,27 @@ observations:
       else if (sys.has(s.id)) errs.push("Duplicate system id: " + s.id);
       else sys.set(s.id, s);
     });
-    doc.systems.forEach((s) => { if (s.runs_on && !sys.has(s.runs_on)) errs.push(s.id + ": runs_on points to unknown system " + s.runs_on); });
+    doc.systems.forEach((s) => {
+      if (s.runs_on && !sys.has(s.runs_on)) errs.push(s.id + ": runs_on points to unknown system " + s.runs_on);
+      if (s.signin && !SIGNIN[s.signin.method]) errs.push(s.id + ": signin.method must be one of " + Object.keys(SIGNIN).join(", "));
+    });
     const asOf = doc.meta.as_of;
     const thr = doc.meta.verify_threshold_days || 180;
+    const part = (label, src, lv) => { const age = lv ? days(lv, asOf) : null; return { label, fact_source: src, last_verified: lv, age, stale: age == null || age > thr }; };
+
+    // Lifecycles: one track per kind of person. The older single `lifecycle` list still works.
+    const lifecycles = doc.lifecycles || (doc.lifecycle ? [{ id: "default", name: "Lifecycle", stages: doc.lifecycle }] : []);
+    const stageLife = new Map();
+    lifecycles.forEach((l) => (l.stages || []).forEach((s) => { if (stageLife.has(s.id)) errs.push("Stage id used twice: " + s.id); stageLife.set(s.id, l.id); }));
+    (doc.domains || []).forEach((d) => {
+      d.lifecycle = d.lifecycle || (lifecycles[0] && lifecycles[0].id);
+      if (!lifecycles.some((l) => l.id === d.lifecycle)) errs.push("Domain " + d.id + ": unknown lifecycle " + d.lifecycle);
+      (d.record || []).forEach((r) => {
+        if (!sys.has(r.system)) errs.push("Domain " + d.id + ": unknown system " + r.system);
+        (r.stages || []).forEach((st) => { if (stageLife.get(st) !== d.lifecycle) errs.push("Domain " + d.id + ": stage " + st + " is not in the " + d.lifecycle + " lifecycle"); });
+      });
+    });
+
     const seen = new Set();
     doc.interfaces.forEach((f) => {
       if (seen.has(f.id)) errs.push("Duplicate interface id: " + f.id);
@@ -1051,23 +1323,56 @@ observations:
       if (!sys.has(f.to)) errs.push(f.id + ": unknown 'to' system " + f.to);
       f.kind = f.kind || "data";
       f.criticality = f.criticality || "medium";
-      f.age = f.last_verified ? days(f.last_verified, asOf) : null;
-      f.stale = f.age == null || f.age > thr;
+      // Fields carry their own direction. A plain string flows from -> to.
+      f.fields = (f.carries || []).map((c) => (typeof c === "string" ? { field: c, flow: "forward" } : Object.assign({ flow: "forward" }, c)));
+      f.fields.forEach((x) => { if (!x.field) errs.push(f.id + ": a carries entry has no field name"); if (!FLOWS.includes(x.flow)) errs.push(f.id + ": " + x.field + " has flow " + x.flow + "; use forward, back, or both"); });
+      f.fwd = !f.fields.length || f.fields.some((x) => x.flow !== "back");
+      f.back = f.fields.some((x) => x.flow !== "forward");
+      const fl = new Set(f.compliance || []);
+      f.fields.forEach((x) => (x.compliance || []).forEach((c) => fl.add(c)));
+      f.flags = [...fl];
+      // Provenance: the interface's claim, plus any field that names its own.
+      f.parts = [part(null, f.fact_source, f.last_verified)].concat(f.fields.filter((x) => x.last_verified || x.fact_source).map((x) => part(x.field, x.fact_source || f.fact_source, x.last_verified)));
+      f.age = f.parts[0].age;
+      f.stale = f.parts.some((p) => p.stale);
       f.drift = [];
     });
-    (doc.domains || []).forEach((d) => (d.record || []).forEach((r) => { if (!sys.has(r.system)) errs.push("Domain " + d.id + ": unknown system " + r.system); }));
     if (errs.length) throw new Error(errs.join("\n"));
     const ifs = doc.interfaces;
     const byId = new Map(ifs.map((f) => [f.id, f]));
     const layers = doc.layers || [];
     const layerOrder = new Map(layers.map((l, i) => [l.id, i]));
-    const m = { doc, sys, ifs, byId, asOf, thr, layers, layerOrder };
+    const allFlags = [...new Set(ifs.flatMap((f) => f.flags))].sort();
+    const m = { doc, sys, ifs, byId, asOf, thr, layers, layerOrder, lifecycles, allFlags };
     m.drift = computeDrift(m);
     return m;
   }
 
   const nm = (m, id) => (m.sys.get(id) || {}).short || id;
-  const linkLabel = (m, f) => nm(m, f.from) + " → " + nm(m, f.to);
+  const arrow = (f) => (f.fwd && f.back ? " ⇄ " : f.back ? " ← " : " → ");
+  const linkLabel = (m, f) => nm(m, f.from) + arrow(f) + nm(m, f.to);
+  const FLOW_MARK = { forward: "→", back: "←", both: "⇄" };
+  function carriesText(f) {
+    const groups = {};
+    f.fields.forEach((x) => (groups[x.flow] = groups[x.flow] || []).push(x.field + (x.frequency && x.frequency !== f.frequency ? " (" + x.frequency + ")" : "")));
+    const keys = FLOWS.filter((k) => groups[k]);
+    if (keys.length === 1 && keys[0] === "forward") return groups.forward.join(", ");
+    return keys.map((k) => FLOW_MARK[k] + " " + groups[k].join(", ")).join(" · ");
+  }
+  // Data moving out of system s along f: forward fields leave `from`, back fields leave `to`.
+  const sendsFrom = (f, s) => f.kind === "data" && ((f.from === s && f.fwd) || (f.to === s && f.back));
+  const other = (f, s) => (f.from === s ? f.to : f.from);
+  function signinOf(m, s) {
+    const sso = m.ifs.filter((f) => f.kind === "sso" && f.to === s.id);
+    if (sso.length) return { kind: "sso", label: "SSO", sub: "via " + sso.map((f) => nm(m, f.from)).join(", ") };
+    if (s.signin) return { kind: s.signin.method, label: SIGNIN[s.signin.method], sub: s.signin.note || "" };
+    if (PEOPLE_FACING.has(s.kind)) return { kind: "missing", label: "None on record", sub: "" };
+    return { kind: "na", label: "", sub: "" };
+  }
+  function sysFlags(m, id) { return new Set(m.ifs.filter((f) => f.from === id || f.to === id).flatMap((f) => f.flags)); }
+  let flags = new Set();
+  const flagMatch = (f) => !flags.size || f.flags.some((x) => flags.has(x));
+  const sysMatch = (m, id) => !flags.size || [...sysFlags(m, id)].some((x) => flags.has(x));
 
   // ---------- Drift ----------
   function computeDrift(m) {
@@ -1077,12 +1382,40 @@ observations:
     const wired = new Set();
 
     m.ifs.forEach((f) => {
-      if (f.stale) add({
-        type: "unverified", sev: f.criticality === "high" ? "high" : "medium", iface: f.id,
-        title: f.name + " has not been verified in " + (f.age == null ? "any recorded check" : f.age + " days"),
-        claim: linkLabel(m, f) + ", " + f.frequency + ". Last verified " + (f.last_verified ? fmt(f.last_verified) : "never") + ".",
-        observed: "Threshold is " + m.thr + " days. Fact source: " + (f.fact_source || "none named") + ".",
-        action: "Ask " + f.owner + " to check it against " + (f.fact_source || "a named fact source") + " and update last_verified.",
+      f.parts.filter((p) => p.stale).forEach((p) => {
+        const fld = p.label ? f.fields.find((x) => x.field === p.label) : null;
+        add({
+          type: "unverified", sev: f.criticality === "high" ? "high" : "medium", iface: f.id,
+          title: (p.label ? "The " + p.label + " field on " + f.name : f.name) + " has not been verified in " + (p.age == null ? "any recorded check" : p.age + " days"),
+          claim: linkLabel(m, f) + ", " + ((fld && fld.frequency) || f.frequency) + ". Last verified " + (p.last_verified ? fmt(p.last_verified) : "never") + ".",
+          observed: "Threshold is " + m.thr + " days. Fact source: " + (p.fact_source || "none named") + ".",
+          action: "Ask " + f.owner + " to check it against " + (p.fact_source || "a named fact source") + " and update last_verified" + (p.label ? " on that field." : "."),
+        });
+      });
+    });
+    m.doc.systems.forEach((s) => {
+      if (!s.signin || s.signin.method === "none") return;
+      const age = s.signin.last_verified ? days(s.signin.last_verified, m.asOf) : null;
+      if (age == null || age > m.thr) add({
+        type: "unverified", sev: "medium", iface: null, system: s.id,
+        title: "Sign-in for " + s.name + " has not been verified in " + (age == null ? "any recorded check" : age + " days"),
+        claim: SIGNIN[s.signin.method] + ". " + (s.signin.note || ""), observed: "Threshold is " + m.thr + " days. Fact source: " + (s.signin.fact_source || "none named") + ".",
+        action: "Ask " + (s.tech_owner || s.owner) + " to pull the user list and update last_verified.",
+      });
+    });
+
+    // Sign-in path: every application or service people use should say how they get in.
+    const ssoNames = new Set(((obs.sso_apps || {}).items || []).map((a) => String(a.app).toLowerCase()));
+    m.doc.systems.forEach((s) => {
+      if (signinOf(m, s).kind !== "missing") return;
+      const seenInSso = ssoNames.has(String(s.short || "").toLowerCase()) || ssoNames.has(String(s.name).toLowerCase());
+      const linked = m.ifs.filter((f) => f.from === s.id || f.to === s.id);
+      add({
+        type: "nosignin", sev: linked.some((f) => f.criticality === "high") ? "high" : "medium", iface: null, system: s.id,
+        title: "No sign-in path on record for " + s.name,
+        claim: "No sso interface, and no signin fact on the system.",
+        observed: seenInSso ? "It does appear in " + obs.sso_apps.fact_source + ", so the source is behind." : "Not in " + (obs.sso_apps ? obs.sso_apps.fact_source : "any sign-in telemetry") + " either.",
+        action: "Ask " + (s.tech_owner || s.owner) + " how staff sign in, then record it: an sso interface, or signin: local with the user list as its fact source. Local accounts are not closed by the employee feed, so they belong on the separation checklist.",
       });
     });
 
@@ -1122,18 +1455,22 @@ observations:
         }
         const f = m.byId.get(j.interface);
         wired.add(f.id);
-        const gap = GAP[f.frequency];
+        // A job can watch one field of a two-way link, which may run on its own schedule.
+        const fld = j.field ? f.fields.find((x) => x.field === j.field) : null;
+        const freq = (fld && fld.frequency) || f.frequency;
+        const what = fld ? "The " + fld.field + " field on " + f.name : f.name;
+        const gap = GAP[freq];
         if (!j.last_success) {
           add({ type: "unobserved", sev: f.criticality === "high" ? "high" : "medium", iface: f.id,
-            title: f.name + " has no successful run on record", claim: linkLabel(m, f) + ", " + f.frequency + ".",
+            title: what + " has no successful run on record", claim: linkLabel(m, f) + ", " + freq + ".",
             observed: "No success in " + jobs.fact_source + ".", action: "Confirm with " + f.owner + " whether it is broken or retired." });
           return;
         }
         const age = days(j.last_success, jobs.captured);
         if (gap && age > gap) add({
           type: "unobserved", sev: f.criticality === "high" || age > 90 ? "high" : "medium", iface: f.id,
-          title: f.name + " is supposed to run " + f.frequency + ", but last succeeded " + age + " days ago",
-          claim: linkLabel(m, f) + ", " + f.frequency + ".",
+          title: what + " is supposed to run " + freq + ", but last succeeded " + age + " days ago",
+          claim: linkLabel(m, f) + ", " + freq + ".",
           observed: "Last success " + fmt(j.last_success) + " in " + jobs.fact_source + " (" + fmt(jobs.captured) + ").",
           action: age > 90 ? "Decide with " + f.owner + " whether this feed is retired. If it is, remove it from the source. If not, it is failing silently." : "Ask " + f.owner + " to fix the job. " + f.failure_mode,
         });
@@ -1168,7 +1505,10 @@ observations:
     direct.forEach((f) => [f.from, f.to].forEach((e) => { if (!ring.has(e)) ring.set(e, 1); }));
     // Ripple follows data flow outward from systems that receive data from the seeds.
     // Sign-in links block people, not feeds, so they don't ripple.
-    let frontier = [...new Set(direct.filter((f) => f.kind === "data" && seeds.has(f.from) && !seeds.has(f.to)).map((f) => f.to))];
+    // Two-way links ripple in whichever direction their fields flow.
+    const firstHop = new Set();
+    direct.forEach((f) => [f.from, f.to].forEach((s) => { if (seeds.has(s) && sendsFrom(f, s) && !seeds.has(other(f, s))) firstHop.add(other(f, s)); }));
+    let frontier = [...firstHop];
     const ripple = [];
     const inR = new Set(direct.map((f) => f.id));
     while (frontier.length) {
@@ -1176,12 +1516,12 @@ observations:
       frontier.forEach((s) => {
         const rs = ring.get(s);
         if (rs >= 3) return;
-        m.ifs.filter((f) => f.from === s && f.kind === "data" && !inR.has(f.id)).forEach((f) => {
-          const rt = ring.get(f.to);
+        m.ifs.filter((f) => sendsFrom(f, s) && !inR.has(f.id)).forEach((f) => {
+          const to = other(f, s), rt = ring.get(to);
           if (rt != null && rt <= rs) return;
           inR.add(f.id);
           ripple.push(Object.assign({ depth: rs + 1 }, { f }));
-          if (rt == null) { ring.set(f.to, rs + 1); next.push(f.to); }
+          if (rt == null) { ring.set(to, rs + 1); next.push(to); }
         });
       });
       frontier = next;
@@ -1199,8 +1539,8 @@ observations:
     const stale = all.filter((f) => f.stale).length;
     const driftN = all.filter((f) => f.drift.some((t) => t !== "unverified")).length;
     const high = all.filter((f) => f.criticality === "high").length;
-    const comp = new Set(); all.forEach((f) => (f.compliance || []).forEach((c) => comp.add(c)));
-    const compN = all.filter((f) => (f.compliance || []).length).length;
+    const comp = new Set(); all.forEach((f) => f.flags.forEach((c) => comp.add(c)));
+    const compN = all.filter((f) => f.flags.length).length;
     const directStale = r.direct.filter((f) => f.stale).length;
 
     let n = "Changing <strong>" + esc(s.name) + "</strong> touches <strong>" + plural(directSys, "system") + "</strong> directly";
@@ -1208,6 +1548,7 @@ observations:
     if (r.direct.length) n += " " + directStale + " of " + r.direct.length + " direct links " + (directStale === 1 ? "has" : "have") + " not been verified in " + m.thr + "+ days";
     n += driftN ? ", and " + plural(driftN, "link") + " in the radius " + (driftN === 1 ? "shows" : "show") + " drift." : ".";
     if (!rippleSys && r.direct.some((f) => f.kind === "sso")) n += " Sign-in links block people, not data feeds, so they don't ripple.";
+    if (flags.size) { const k = all.filter(flagMatch).length; n += " <strong>" + k + " of " + all.length + "</strong> links in the radius carry " + esc([...flags].join(" or ")) + "; the rest are faded below."; }
     $("narrative").innerHTML = n;
 
     $("impact-stats").innerHTML = [
@@ -1227,31 +1568,34 @@ observations:
     const row = (f) => {
       const pills = [];
       pills.push('<span class="pill ' + f.criticality + '">' + esc(f.criticality) + "</span>");
-      (f.compliance || []).forEach((c) => pills.push('<span class="pill tag">' + esc(c) + "</span>"));
+      f.flags.forEach((c) => pills.push('<span class="pill tag">' + esc(c) + "</span>"));
       const ver = f.last_verified ? fmt(f.last_verified) : "Never";
-      const vpill = f.stale ? ' <span class="pill stale">' + (f.age == null ? "unverified" : f.age + "d") + "</span>" : "";
+      const sp = f.parts.filter((p) => p.stale);
+      const vpill = sp.map((p) => ' <span class="pill stale">' + (p.label ? esc(p.label) + " " : "") + (p.age == null ? "unverified" : p.age + "d") + "</span>").join("");
       const dr = f.drift.filter((t) => t !== "unverified");
       const dpill = dr.length ? ' <span class="pill drift">drift</span>' : "";
-      return "<tr><td><b>" + esc(linkLabel(m, f)) + '</b><div class="sub">' + esc(f.name) + " · " + esc(f.carries ? f.carries.join(", ") : "") + "</div></td>" +
-        "<td>" + esc(f.kind === "sso" ? "Sign-in" : "Data") + '<div class="sub">' + esc(f.method) + " · " + esc(f.frequency) + "</div></td>" +
+      return "<tr><td><b>" + esc(linkLabel(m, f)) + '</b><div class="sub">' + esc(f.name) + " · " + esc(carriesText(f)) + "</div></td>" +
+        "<td>" + esc(f.kind === "sso" ? "Sign-in" : f.fwd && f.back ? "Data, two-way" : "Data") + '<div class="sub">' + esc(f.method) + " · " + esc(f.frequency) + "</div></td>" +
         "<td>" + esc(f.owner) + "</td><td>" + pills.join(" ") + "</td>" +
         "<td>" + ver + vpill + dpill + '<div class="sub">' + esc(f.fact_source || "") + "</div></td>" +
         '<td class="sub">' + esc(f.failure_mode || "") + "</td></tr>";
     };
     const sortF = (a, b) => CRIT_RANK[a.criticality] - CRIT_RANK[b.criticality] || a.id.localeCompare(b.id);
-    let t = "<thead><tr><th>Link</th><th>Kind</th><th>Owner</th><th>Criticality</th><th>Verified</th><th>If it fails</th></tr></thead><tbody>";
-    t += '<tr class="grouprow"><td colspan="6">Direct<span>' + plural(r.direct.length, "link") + ", rebuild or retest</span></td></tr>";
-    t += r.direct.slice().sort(sortF).map(row).join("");
-    if (r.ripple.length) {
-      t += '<tr class="grouprow"><td colspan="6">Ripple<span>' + plural(r.ripple.length, "link") + ", regression check</span></td></tr>";
-      t += r.ripple.slice().sort(sortF).map(row).join("");
+    const dF = r.direct.filter(flagMatch), rF = r.ripple.filter(flagMatch);
+    const of = (a, b) => (flags.size ? a + " of " + plural(b, "link") + " flagged" : plural(b, "link"));
+    let t = "<thead><tr><th>Link</th><th>Kind</th><th>Owner</th><th>Criticality and flags</th><th>Verified</th><th>If it fails</th></tr></thead><tbody>";
+    t += '<tr class="grouprow"><td colspan="6">Direct<span>' + of(dF.length, r.direct.length) + ", rebuild or retest</span></td></tr>";
+    t += dF.slice().sort(sortF).map(row).join("");
+    if (rF.length || (r.ripple.length && !flags.size)) {
+      t += '<tr class="grouprow"><td colspan="6">Ripple<span>' + of(rF.length, r.ripple.length) + ", regression check</span></td></tr>";
+      t += rF.slice().sort(sortF).map(row).join("");
     }
     $("radius-table").innerHTML = t + "</tbody>";
 
     // Owners
     const own = new Map();
     const bump = (o) => { if (o) own.set(o, (own.get(o) || 0) + 1); };
-    all.forEach((f) => bump(f.owner));
+    all.filter(flagMatch).forEach((f) => bump(f.owner));
     [s.owner, s.tech_owner].forEach((o) => { if (o && !own.has(o)) own.set(o, 0); });
     $("owners").innerHTML = [...own].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([o, c]) => '<div class="owner"><b>' + esc(o) + "</b><span>" + (c ? plural(c, "link") : "system owner") + "</span></div>").join("");
@@ -1262,6 +1606,16 @@ observations:
 
   function stat(n, k, cls) { return '<div class="stat ' + (cls || "") + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>"; }
 
+  function edgeCls(f) {
+    const dr = f.drift.some((t) => t !== "unverified");
+    return [f.kind === "sso" ? "sso" : "", f.criticality === "high" ? "high" : "", dr ? "drift" : f.stale ? "stale" : "", flagMatch(f) ? "" : "dim"].join(" ");
+  }
+  // Arrowheads follow the fields: forward at the far end, back at the near end, both for two-way links.
+  function markers(f, mk) { return (f.fwd ? ' marker-end="url(#mk-' + mk + ')"' : "") + (f.back ? ' marker-start="url(#mk-' + mk + ')"' : ""); }
+  function nodeDim(r, id) {
+    if (!flags.size || id === r.x) return false;
+    return !r.direct.concat(r.ripple).some((f) => (f.from === id || f.to === id) && flagMatch(f));
+  }
   function nodeWidth(label) { return Math.max(96, Math.round(label.length * 7.6 + 26)); }
 
   function radiusSVG(m, r) {
@@ -1276,7 +1630,7 @@ observations:
     const TAU = 2 * Math.PI, norm = (a) => ((a % TAU) + TAU) % TAU;
     const angDist = (a, b) => { const d = Math.abs(norm(a) - norm(b)); return Math.min(d, TAU - d); };
     const parentOf = {};
-    r.ripple.forEach((f) => { if (!(f.to in parentOf) && r.ring.get(f.from) < r.ring.get(f.to)) parentOf[f.to] = f.from; });
+    r.ripple.forEach((f) => { const [a, b] = r.ring.get(f.from) < r.ring.get(f.to) ? [f.from, f.to] : [f.to, f.from]; if (!(b in parentOf) && r.ring.get(a) < r.ring.get(b)) parentOf[b] = a; });
     rings.forEach((ids, k) => {
       if (!ids.length) return;
       if (k === 0) { pos[ids[0]] = { x: cx, y: cy }; return; }
@@ -1312,16 +1666,16 @@ observations:
       if (!pos[a] || !pos[b]) return "";
       const p1 = clip(pos[b], pos[a], a), p2 = clip(pos[a], pos[b], b);
       const mk = cls.includes("drift") ? "crit" : cls.includes("stale") ? "warn" : "muted";
-      return '<line class="edge ' + cls + '" x1="' + p1.x.toFixed(1) + '" y1="' + p1.y.toFixed(1) + '" x2="' + p2.x.toFixed(1) + '" y2="' + p2.y.toFixed(1) + '"' + (cls.includes("hosted") ? "" : ' marker-end="url(#mk-' + mk + ')"') + "><title>" + esc(title) + "</title></line>";
+      return '<line class="edge ' + cls + '" x1="' + p1.x.toFixed(1) + '" y1="' + p1.y.toFixed(1) + '" x2="' + p2.x.toFixed(1) + '" y2="' + p2.y.toFixed(1) + '"' + (cls.includes("hosted") ? "" : markers(f, mk)) + "><title>" + esc(title) + "</title></line>";
     };
     r.hosted.forEach((h) => (g += edge(null, r.x, h, "hosted", nm(m, h) + " runs on " + nm(m, r.x))));
     r.direct.concat(r.ripple).forEach((f) => {
-      const cls = [f.kind === "sso" ? "sso" : "", f.criticality === "high" ? "high" : "", f.drift.some((t) => t !== "unverified") ? "drift" : f.stale ? "stale" : ""].join(" ");
-      g += edge(f, f.from, f.to, cls, linkLabel(m, f) + ": " + f.name + (f.stale ? " (unverified " + (f.age ?? "") + "d)" : ""));
+      const cls = edgeCls(f);
+      g += edge(f, f.from, f.to, cls, linkLabel(m, f) + ": " + f.name + (f.stale ? " (unverified)" : ""));
     });
     Object.keys(pos).forEach((id) => {
       const p = pos[id], w = W2[id] * 2, s = m.sys.get(id), lc = "var(--l-" + s.layer + ")";
-      g += '<g class="node' + (id === r.x ? " center" : "") + '"><rect x="' + (p.x - w / 2).toFixed(1) + '" y="' + (p.y - NH / 2).toFixed(1) + '" width="' + w + '" height="' + NH + '" rx="6" style="fill:color-mix(in srgb, ' + lc + " " + (id === r.x ? 30 : 14) + "%, var(--surface));stroke:" + lc + '"/>' +
+      g += '<g class="node' + (id === r.x ? " center" : "") + (nodeDim(r, id) ? " dim" : "") + '"><rect x="' + (p.x - w / 2).toFixed(1) + '" y="' + (p.y - NH / 2).toFixed(1) + '" width="' + w + '" height="' + NH + '" rx="6" style="fill:color-mix(in srgb, ' + lc + " " + (id === r.x ? 30 : 14) + "%, var(--surface));stroke:" + lc + '"/>' +
         '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + 4.5).toFixed(1) + '" text-anchor="middle">' + esc(nm(m, id)) + "</text><title>" + esc(s.name + " · " + s.summary) + "</title></g>";
     });
     const dSys = rings[1].map((id) => nm(m, id)).join(", ");
@@ -1434,14 +1788,13 @@ observations:
       if (k.y1 == null || k.y2 == null) return;
       if (k.hosted) { g += '<path class="edge hosted" d="' + path(k) + '"><title>' + esc(nm(m, k.to) + " runs on " + nm(m, k.from)) + "</title></path>"; return; }
       const f = k.f;
-      const dr = f.drift.some((t) => t !== "unverified");
-      const cls = [f.kind === "sso" ? "sso" : "", f.criticality === "high" ? "high" : "", dr ? "drift" : f.stale ? "stale" : ""].join(" ");
-      const mk = dr ? "crit" : f.stale ? "warn" : "muted";
-      g += '<path class="edge ' + cls + '" d="' + path(k) + '" marker-end="url(#mk-' + mk + ')"><title>' + esc(linkLabel(m, f) + ": " + f.name + (f.stale ? " (unverified " + (f.age ?? "") + "d)" : "")) + "</title></path>";
+      const cls = edgeCls(f);
+      const mk = cls.includes("drift") ? "crit" : cls.includes("stale") ? "warn" : "muted";
+      g += '<path class="edge ' + cls + '" d="' + path(k) + '"' + markers(f, mk) + '><title>' + esc(linkLabel(m, f) + ": " + f.name + (f.stale ? " (unverified)" : "")) + "</title></path>";
     });
     Object.keys(pos).forEach((id) => {
       const p = pos[id], s = m.sys.get(id), k = r.ring.get(id), lc = "var(--l-" + s.layer + ")";
-      const cls = id === r.x ? " center" : k >= 2 ? " ripple" : "";
+      const cls = (id === r.x ? " center" : k >= 2 ? " ripple" : "") + (nodeDim(r, id) ? " dim" : "");
       const fill = id === r.x ? "color-mix(in srgb, " + lc + " 32%, var(--surface))" : k >= 2 ? "var(--surface)" : "color-mix(in srgb, " + lc + " 16%, var(--surface))";
       g += '<g class="node' + cls + '"><rect x="' + p.x + '" y="' + p.y + '" width="' + p.w + '" height="' + NH + '" rx="6" style="fill:' + fill + ";stroke:" + lc + '"/>' +
         '<text x="' + (p.x + 12) + '" y="' + (p.y + NH / 2 + 4.5) + '">' + esc(nm(m, id)) + "</text>" +
@@ -1464,6 +1817,7 @@ observations:
     const ln = (cls, mk) => '<svg width="44" height="12" aria-hidden="true"><line class="edge ' + cls + '" x1="2" y1="6" x2="36" y2="6"' + (mk ? ' marker-end="url(#mk-' + mk + ')"' : "") + "/></svg>";
     return '<span>' + ln("high", "muted") + "Data feed (thicker = high criticality)</span>" +
       "<span>" + ln("sso", "muted") + "Sign-in only</span>" +
+      '<span><svg width="44" height="12" aria-hidden="true"><line class="edge" x1="8" y1="6" x2="36" y2="6" marker-start="url(#mk-muted)" marker-end="url(#mk-muted)"/></svg>Two-way (fields flow both directions)</span>' +
       "<span>" + ln("hosted", "") + "Runs on platform</span>" +
       "<span>" + ln("stale high", "warn") + "Unverified " + M.thr + "+ days</span>" +
       "<span>" + ln("drift high", "crit") + "Drift in telemetry</span>";
@@ -1475,10 +1829,15 @@ observations:
 
   // ---------- Ownership ----------
   function renderOwnership() {
-    const m = M, stages = m.doc.lifecycle || [];
+    const m = M;
+    if (!currentLife || !m.lifecycles.some((l) => l.id === currentLife)) currentLife = m.lifecycles[0] && m.lifecycles[0].id;
+    const life = m.lifecycles.find((l) => l.id === currentLife) || { stages: [] };
+    const stages = life.stages || [];
+    const domains = (m.doc.domains || []).filter((d) => d.lifecycle === currentLife);
+    $("lifecycles").innerHTML = m.lifecycles.map((l) => '<button type="button" class="chipbtn" data-life="' + esc(l.id) + '" aria-pressed="' + (l.id === currentLife) + '">' + esc(l.name) + "</button>").join("");
     let conflicts = 0, gaps = 0;
     let t = '<thead><tr><th scope="col">Data</th>' + stages.map((s) => '<th scope="col" class="stage' + (s.handoff ? " handoff" : "") + '">' + esc(s.name) + (s.handoff ? "<br><span class=\"mono\">handoff</span>" : "") + "</th>").join("") + "</tr></thead><tbody>";
-    (m.doc.domains || []).forEach((d) => {
+    domains.forEach((d) => {
       const per = stages.map((st) => (d.record || []).filter((r) => (r.stages || []).includes(st.id)).map((r) => r.system));
       const idx = per.map((p, i) => (p.length ? i : -1)).filter((i) => i >= 0);
       const first = Math.min(...idx), last = Math.max(...idx);
@@ -1505,14 +1864,20 @@ observations:
       t += "</tr>";
     });
     $("matrix").innerHTML = t + "</tbody>";
-    $("own-stats").innerHTML = stat((m.doc.domains || []).length, "data domains") + stat(new Set((m.doc.domains || []).flatMap((d) => d.record.map((r) => r.system))).size, "systems of record") + stat(conflicts, "conflicts", conflicts ? "crit" : "") + stat(gaps, "gaps", gaps ? "warn" : "");
+    $("matrix").setAttribute("aria-label", "System of record by stage, " + (life.name || "") + " lifecycle");
+    $("own-stats").innerHTML = stat(domains.length, "data domains") + stat(new Set(domains.flatMap((d) => d.record.map((r) => r.system))).size, "systems of record") + stat(conflicts, "conflicts", conflicts ? "crit" : "") + stat(gaps, "gaps", gaps ? "warn" : "");
     $("layer-legend").innerHTML = layerLegend(m);
 
     const count = (id) => m.ifs.filter((f) => f.from === id || f.to === id).length;
-    let st = "<thead><tr><th>System</th><th>Layer</th><th>Business owner</th><th>Technical owner</th><th>Vendor</th><th>Runs on</th><th>Links</th></tr></thead><tbody>";
-    st += m.doc.systems.slice().sort((a, b) => (m.layerOrder.get(a.layer) ?? 99) - (m.layerOrder.get(b.layer) ?? 99) || a.name.localeCompare(b.name)).map((s) => {
+    let st = "<thead><tr><th>System</th><th>Layer</th><th>Business owner</th><th>Technical owner</th><th>Sign-in</th><th>Flags</th><th>Links</th></tr></thead><tbody>";
+    const shown = m.doc.systems.filter((s) => sysMatch(m, s.id));
+    $("systems-note").textContent = (flags.size ? shown.length + " of " + m.doc.systems.length + " systems touch a link carrying " + [...flags].join(" or ") + ". " : "") + "Sign-in shows how people get in. Applications with no sign-in path on record also appear in the drift report.";
+    st += shown.slice().sort((a, b) => (m.layerOrder.get(a.layer) ?? 99) - (m.layerOrder.get(b.layer) ?? 99) || a.name.localeCompare(b.name)).map((s) => {
       const L = m.layers.find((l) => l.id === s.layer);
-      return "<tr><td><b>" + esc(s.name) + '</b><div class="sub">' + esc(s.summary || "") + '</div></td><td><span class="lchip" style="--lc:var(--l-' + esc(s.layer) + ')">' + esc(L ? L.name : s.layer) + "</span></td><td>" + esc(s.owner) + "</td><td>" + esc(s.tech_owner || "") + "</td><td>" + esc(s.vendor || "") + "</td><td>" + esc(s.runs_on ? nm(m, s.runs_on) : "") + '</td><td style="font-variant-numeric:tabular-nums">' + count(s.id) + "</td></tr>";
+      const si = signinOf(m, s);
+      const siCell = si.kind === "missing" ? '<span class="pill drift">none on record</span>' : si.kind === "na" ? '<span class="sub">n/a</span>' : esc(si.label) + (si.sub ? '<div class="sub">' + esc(si.sub) + "</div>" : "");
+      const fl = [...sysFlags(m, s.id)].sort().map((c) => '<span class="pill tag">' + esc(c) + "</span>").join(" ");
+      return "<tr><td><b>" + esc(s.name) + '</b><div class="sub">' + esc(s.summary || "") + (s.vendor ? " · " + esc(s.vendor) : "") + (s.runs_on ? " · runs on " + esc(nm(m, s.runs_on)) : "") + '</div></td><td><span class="lchip" style="--lc:var(--l-' + esc(s.layer) + ')">' + esc(L ? L.name : s.layer) + "</span></td><td>" + esc(s.owner) + "</td><td>" + esc(s.tech_owner || "") + "</td><td>" + siCell + "</td><td>" + fl + '</td><td style="font-variant-numeric:tabular-nums">' + count(s.id) + "</td></tr>";
     }).join("");
     $("systems-table").innerHTML = st + "</tbody>";
   }
@@ -1520,18 +1885,22 @@ observations:
 
   // ---------- Drift ----------
   function renderDrift() {
-    const m = M, d = m.drift;
+    const m = M;
+    const keep = (x) => !flags.size || (x.iface ? flagMatch(m.byId.get(x.iface)) : x.system ? sysMatch(m, x.system) : false);
+    const d = m.drift.filter(keep);
     const by = (t) => d.filter((x) => x.type === t);
     const wiredN = m.wired.size;
     $("drift-stats").innerHTML =
       stat(by("unobserved").length, "claimed, not seen working", by("unobserved").length ? "crit" : "") +
       stat(by("undocumented").length, "running, not documented", by("undocumented").length ? "crit" : "") +
+      stat(by("nosignin").length, "no sign-in path", by("nosignin").length ? "crit" : "") +
       stat(by("mismatch").length, "owner mismatches", by("mismatch").length ? "warn" : "") +
       stat(by("unverified").length, "past the " + m.thr + "-day check", by("unverified").length ? "warn" : "") +
       stat(wiredN + " / " + m.ifs.length, "links with telemetry wired");
     const groups = [
       ["unobserved", "Claimed, but not seen working", "The source says these links exist and run. Telemetry disagrees."],
       ["undocumented", "Running, but not in the source", "Telemetry shows these. No impact radius can include them until they are documented."],
+      ["nosignin", "No sign-in path on record", "Applications people use, with neither a sign-in interface nor a recorded sign-in fact. Access reviews and offboarding can't see them."],
       ["mismatch", "Owner mismatches", "Two records name different owners for the same system."],
       ["unverified", "Past the " + m.thr + "-day check", "No one has confirmed these claims recently. They may still be true."],
     ];
@@ -1543,6 +1912,7 @@ observations:
       h += items.map((x) => '<article class="finding ' + x.sev + '"><div class="stripe" aria-hidden="true"></div><div class="body"><div class="top"><b>' + esc(x.title) + '</b><span class="pill ' + x.sev + '">' + (x.sev === "high" ? "high" : "medium") + (x.iface ? " · " + esc(x.iface) : "") + '</span></div><dl class="row"><dt>Source says</dt><dd>' + esc(x.claim) + "</dd><dt>Observed</dt><dd>" + esc(x.observed) + "</dd><dt>Next step</dt><dd>" + esc(x.action) + "</dd></dl></div></article>").join("");
       h += "</div>";
     });
+    if (flags.size) h = '<p class="lede">Showing ' + plural(d.length, "finding") + " of " + m.drift.length + " that touch " + esc([...flags].join(" or ")) + ".</p>" + h;
     const unwired = m.ifs.length - wiredN;
     h += '<p class="lede">' + plural(unwired, "link") + " " + (unwired === 1 ? "has" : "have") + " no telemetry wired yet, so a person has to verify " + (unwired === 1 ? "it" : "them") + ". Wiring a fact source to each one is how the source stays true without a yearly audit.</p>";
     $("drift-groups").innerHTML = h;
@@ -1551,7 +1921,7 @@ observations:
   // ---------- Shell ----------
   function renderMeta() {
     const m = M, d = m.doc.meta;
-    $("meta").innerHTML = "<span>As of <b>" + fmt(d.as_of) + "</b></span><span><b>" + m.sys.size + "</b> systems</span><span><b>" + m.ifs.length + "</b> interfaces</span><span>Steward: <b>" + esc(d.steward || "") + "</b></span>" + (d.fixture ? "<span>Fictional fixture institution</span>" : "");
+    $("meta").innerHTML = "<span>As of <b>" + fmt(d.as_of) + "</b></span><span><b>" + m.sys.size + "</b> systems</span><span><b>" + m.ifs.length + "</b> interfaces</span><span><b>" + m.lifecycles.length + "</b> lifecycles</span><span>Steward: <b>" + esc(d.steward || "") + "</b></span>" + (d.fixture ? "<span>Fictional fixture institution</span>" : "");
   }
   function renderControls() {
     const m = M;
@@ -1563,11 +1933,18 @@ observations:
     $("presets").innerHTML = (m.doc.scenarios || []).filter((s) => m.sys.has(s.system)).map((s) => '<button type="button" class="chipbtn" data-system="' + esc(s.system) + '" aria-pressed="false">' + esc(s.name) + "</button>").join("");
     if (!currentSystem || !m.sys.has(currentSystem)) currentSystem = (m.doc.scenarios && m.doc.scenarios[0] && m.doc.scenarios[0].system) || m.doc.systems[0].id;
   }
-  function renderAll() { renderMeta(); renderControls(); renderImpact(); renderOwnership(); renderDrift(); }
+  function renderFlags() {
+    const m = M;
+    flags = new Set([...flags].filter((x) => m.allFlags.includes(x)));
+    $("flags").innerHTML = '<button type="button" class="chipbtn" data-flag="" aria-pressed="' + !flags.size + '">All</button>' +
+      m.allFlags.map((c) => '<button type="button" class="chipbtn" data-flag="' + esc(c) + '" aria-pressed="' + flags.has(c) + '">' + esc(c) + " <span class=\"mono\">" + m.ifs.filter((f) => f.flags.includes(c)).length + "</span></button>").join("");
+  }
+  function renderAll() { renderMeta(); renderControls(); renderFlags(); renderImpact(); renderOwnership(); renderDrift(); }
 
   const VIEWS = ["impact", "ownership", "drift", "source"];
   function show(view) {
     if (!VIEWS.includes(view)) view = "impact";
+    $("filterbar").hidden = view === "source";
     VIEWS.forEach((v) => { $(v).hidden = v !== view; const t = $("tab-" + v); t.setAttribute("aria-selected", String(v === view)); t.tabIndex = v === view ? 0 : -1; });
   }
   document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { location.hash = b.dataset.view; show(b.dataset.view); } });
@@ -1580,6 +1957,13 @@ observations:
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
   $("sys-select").addEventListener("change", (e) => { currentSystem = e.target.value; renderImpact(); });
   $("layout").addEventListener("click", (e) => { const b = e.target.closest(".chipbtn"); if (b) { layout = b.dataset.layout; renderImpact(); } });
+  $("flags").addEventListener("click", (e) => {
+    const b = e.target.closest(".chipbtn"); if (!b) return;
+    const c = b.dataset.flag;
+    if (!c) flags = new Set(); else if (flags.has(c)) flags.delete(c); else flags.add(c);
+    renderFlags(); renderImpact(); renderOwnership(); renderDrift();
+  });
+  $("lifecycles").addEventListener("click", (e) => { const b = e.target.closest(".chipbtn"); if (b) { currentLife = b.dataset.life; renderOwnership(); } });
   $("presets").addEventListener("click", (e) => { const b = e.target.closest(".chipbtn"); if (b) { currentSystem = b.dataset.system; renderImpact(); } });
 
   const status = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
