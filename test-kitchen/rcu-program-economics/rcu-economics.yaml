@@ -1,0 +1,231 @@
+# RCU Program Economics: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the demo. It joins three recipe
+# inputs that are usually read on their own:
+#   programs   Academic Portfolio Analyst (01): headcount by program by year
+#   segments   Net Tuition & Discount Analyzer (17): tuition and aid by segment by year
+#   sections   Course Section Viability Analyzer (16): the Fall 2026 section export
+# and adds the two things a join needs: a subject-to-program map, and the
+# allocation rules, kept in settings so a reader can see and change them.
+#
+# Schema
+#   meta       institution, census years in order (aid years use the same order), steward
+#   settings   allocation and flag rules (see below)
+#   segments   per segment: headcount, gross tuition, institutional aid, funded aid,
+#              one value per year in meta.years
+#   subjects   course prefix -> program name, or {program: null, note} for a course
+#              that serves several programs. Add a note to explain a mapping.
+#   sections   id, course ("PRE ### — Title"), instructor, seat cap, enrolled
+#   programs   name, level (must match a segment), school, online share in the
+#              latest year, headcount by year, optional note
+#
+# Rules the page applies
+#   discount rate      institutional aid / gross tuition (recipe 17)
+#   sticker            gross tuition / headcount, per segment and year
+#   net per student    sticker x (1 - discount). One rate per segment by default.
+#   online_discount    optional, per segment. Gives online students their own rate
+#                      and solves the campus rate so the segment's aid still adds up.
+#                      null means online and campus students get the segment rate.
+#   program net        headcount x net per student, split by the program's online share
+#   seat share         a program's enrolled seats in mapped sections / all seats
+#   revenue share      a program's net tuition / all net tuition
+#   load gap           flag a program when seat share and revenue share differ by
+#                      more than load_gap. It compares two shares; it is not a cost.
+#   section flags      under-enrolled below cancel_below; near cap at near_cap fill
+#                      or above; over cap when enrolled > cap (recipe 16)
+#   reconcile          program headcount by level must equal segment headcount, every year
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-20"
+  years: [Fall 2022, Fall 2023, Fall 2024, Fall 2025, Fall 2026]
+  term: Fall 2026
+  steward: Institutional Research and Business Office
+  fixture: true
+
+settings:
+  allocation: headcount
+  online_discount: {Undergraduate: null, Graduate: null}
+  discount_goal: 0.52
+  approaching_band: 0.56
+  cancel_below: 10
+  near_cap: 0.90
+  load_gap: 0.015
+
+segments:
+  Undergraduate:
+    headcount: [1602, 1609, 1617, 1622, 1630]
+    gross_tuition: [44856000, 46017400, 47216400, 48335600, 49552000]
+    institutional_aid: [28035000, 29036979, 30076847, 31079791, 32208800]
+    funded_aid: [4205250, 4355547, 4511527, 4661969, 4831320]
+  Graduate:
+    headcount: [364, 377, 389, 403, 417]
+    gross_tuition: [6115200, 6446700, 6768600, 7133100, 7506000]
+    institutional_aid: [733824, 773604, 812232, 855972, 900720]
+    funded_aid: [110074, 116041, 121835, 128396, 135108]
+
+subjects:
+  ENG: {program: English, note: "Composition is a general-education requirement, so English teaches far more seats than it has majors."}
+  HIS: History
+  COM: Communication
+  PHI: Philosophy
+  MUS: Music
+  BIO: Biology
+  CHE: Chemistry
+  MAT: {program: Mathematics, note: "MAT means Mathematics in the schedule and the Master of Arts in Teaching in the catalog. Ask before you join on it."}
+  ENV: Environmental Science
+  EXS: Exercise Science
+  PSY: Psychology
+  SOC: Sociology
+  CRJ: Criminal Justice
+  POL: Political Science
+  BUS: Business Administration
+  MGT: Management & Leadership
+  SPM: Sport Management
+  ACC: Accounting
+  MKT: Marketing
+  FIN: Finance
+  HCA: Healthcare Administration
+  MBA: MBA
+  EDU: {program: null, note: "Education core. Every licensure program takes it, so no single program owns these seats."}
+  EDS: Secondary Education
+  SPE: Special Education
+  EDM: Middle Grades Education
+  PED: Physical Education
+  MED: MEd
+  BIB: Biblical Studies
+  MIN: Christian Ministry
+  THE: Theology
+  YMN: Youth Ministry
+  WOR: Worship Leadership
+  MIS: Missions & Intercultural Studies
+  PAS: Pastoral Ministry
+  MDV: MDiv
+
+sections:
+
+  # Arts & Sciences
+  - {id: SEC-001, course: "ENG 305 — Composition & Rhetoric", instructor: "Dr. A. Bennett", cap: 62, enrolled: 46}
+  - {id: SEC-002, course: "BIO 305 — General Biology I", instructor: "Dr. C. Delgado", cap: 21, enrolled: 18}
+  - {id: SEC-003, course: "PSY 305 — Intro to Psychology", instructor: "Dr. E. Foster", cap: 18, enrolled: 15}
+  - {id: SEC-004, course: "HIS 110 — U.S. History Survey", instructor: "Prof. G. Hayes", cap: 40, enrolled: 31}
+  - {id: SEC-005, course: "COM 201 — Public Speaking", instructor: "Dr. I. Nguyen", cap: 83, enrolled: 61}
+  - {id: SEC-006, course: "CHE 210 — General Chemistry", instructor: "Dr. A. Bennett", cap: 47, enrolled: 49}
+  - {id: SEC-007, course: "MAT 320 — College Algebra", instructor: "Prof. M. Rivera", cap: 28, enrolled: 22}
+  - {id: SEC-008, course: "EXS 101 — Anatomy & Physiology", instructor: "Dr. O. Sullivan", cap: 34, enrolled: 32}
+  - {id: SEC-009, course: "CRJ 210 — Intro to Criminal Justice", instructor: "Dr. Q. Underwood", cap: 78, enrolled: 57}
+  - {id: SEC-010, course: "SOC 110 — Intro to Sociology", instructor: "Prof. S. Whitaker", cap: 68, enrolled: 31}
+  - {id: SEC-011, course: "PHI 110 — Intro to Philosophy", instructor: "Dr. R. Coleman", cap: 44, enrolled: 32}
+  - {id: SEC-012, course: "ENV 110 — Environmental Studies", instructor: "Dr. T. Marsh", cap: 55, enrolled: 45}
+  - {id: SEC-013, course: "POL 210 — American Government", instructor: "Prof. L. Abara", cap: 68, enrolled: 32}
+  - {id: SEC-014, course: "MUS 101 — Music Theory I", instructor: "Dr. N. Petrov", cap: 22, enrolled: 17}
+  - {id: SEC-015, course: "ENG 305 — Composition & Rhetoric", instructor: "Dr. B. Cho", cap: 75, enrolled: 54}
+  - {id: SEC-016, course: "BIO 201 — General Biology I", instructor: "Prof. D. Ellison", cap: 41, enrolled: 37}
+  - {id: SEC-017, course: "PSY 320 — Intro to Psychology", instructor: "Dr. A. Bennett", cap: 64, enrolled: 54}
+  - {id: SEC-018, course: "HIS 110 — U.S. History Survey", instructor: "Dr. C. Delgado", cap: 10, enrolled: 9}
+  - {id: SEC-019, course: "COM 110 — Public Speaking", instructor: "Dr. E. Foster", cap: 123, enrolled: 58}
+  - {id: SEC-020, course: "CHE 210 — General Chemistry", instructor: "Prof. G. Hayes", cap: 65, enrolled: 60}
+
+  # Business & Leadership
+  - {id: SEC-021, course: "BUS 101 — Principles of Management", instructor: "Dr. E. Foster", cap: 46, enrolled: 43}
+  - {id: SEC-022, course: "MKT 320 — Principles of Marketing", instructor: "Dr. K. Osei", cap: 28, enrolled: 21}
+  - {id: SEC-023, course: "ACC 210 — Financial Accounting", instructor: "Prof. M. Rivera", cap: 39, enrolled: 40}
+  - {id: SEC-024, course: "FIN 201 — Corporate Finance", instructor: "Dr. O. Sullivan", cap: 52, enrolled: 25}
+  - {id: SEC-025, course: "SPM 101 — Foundations of Sport Mgmt", instructor: "Dr. Q. Underwood", cap: 32, enrolled: 25}
+  - {id: SEC-026, course: "MGT 410 — Organizational Behavior", instructor: "Dr. E. Foster", cap: 31, enrolled: 15}
+  - {id: SEC-027, course: "HCA 101 — Health Systems", instructor: "Dr. R. Coleman", cap: 71, enrolled: 52}
+  - {id: SEC-028, course: "MBA 320 — Strategic Management", instructor: "Dr. T. Marsh", cap: 64, enrolled: 61}
+  - {id: SEC-029, course: "BUS 101 — Principles of Management", instructor: "Prof. L. Abara", cap: 47, enrolled: 34}
+  - {id: SEC-030, course: "MKT 305 — Principles of Marketing", instructor: "Dr. N. Petrov", cap: 48, enrolled: 37}
+  - {id: SEC-031, course: "ACC 110 — Financial Accounting", instructor: "Dr. B. Cho", cap: 40, enrolled: 32}
+  - {id: SEC-032, course: "FIN 305 — Corporate Finance", instructor: "Prof. D. Ellison", cap: 28, enrolled: 23}
+  - {id: SEC-033, course: "SPM 320 — Foundations of Sport Mgmt", instructor: "Dr. A. Bennett", cap: 80, enrolled: 60}
+  - {id: SEC-034, course: "MGT 305 — Organizational Behavior", instructor: "Dr. C. Delgado", cap: 68, enrolled: 52}
+
+  # Education
+  - {id: SEC-035, course: "EDU 201 — Foundations of Education", instructor: "Dr. E. Foster", cap: 53, enrolled: 45}
+  - {id: SEC-036, course: "EDS 210 — Secondary Methods", instructor: "Prof. G. Hayes", cap: 9, enrolled: 8}
+  - {id: SEC-037, course: "SPE 101 — Exceptional Learners", instructor: "Dr. I. Nguyen", cap: 85, enrolled: 41}
+  - {id: SEC-038, course: "EDM 101 — Middle Grades Methods", instructor: "Dr. K. Osei", cap: 60, enrolled: 53}
+  - {id: SEC-039, course: "PED 101 — Kinesiology", instructor: "Prof. M. Rivera", cap: 13, enrolled: 16}
+  - {id: SEC-040, course: "MED 305 — Curriculum Design", instructor: "Dr. E. Foster", cap: 54, enrolled: 55}
+  - {id: SEC-041, course: "EDU 305 — Foundations of Education", instructor: "Dr. Q. Underwood", cap: 82, enrolled: 42}
+  - {id: SEC-042, course: "EDS 410 — Secondary Methods", instructor: "Prof. S. Whitaker", cap: 40, enrolled: 36}
+  - {id: SEC-043, course: "SPE 305 — Exceptional Learners", instructor: "Dr. R. Coleman", cap: 16, enrolled: 15}
+  - {id: SEC-044, course: "EDM 110 — Middle Grades Methods", instructor: "Dr. T. Marsh", cap: 34, enrolled: 29}
+
+  # Ministry & Theology
+  - {id: SEC-045, course: "BIB 201 — Old Testament Survey", instructor: "Dr. E. Foster", cap: 32, enrolled: 35}
+  - {id: SEC-046, course: "MIN 101 — Foundations of Ministry", instructor: "Dr. N. Petrov", cap: 15, enrolled: 13}
+  - {id: SEC-047, course: "THE 320 — Systematic Theology I", instructor: "Dr. B. Cho", cap: 75, enrolled: 42}
+  - {id: SEC-048, course: "YMN 210 — Youth Ministry Foundations", instructor: "Prof. D. Ellison", cap: 34, enrolled: 30}
+  - {id: SEC-049, course: "WOR 305 — Worship Leadership", instructor: "Dr. A. Bennett", cap: 45, enrolled: 41}
+  - {id: SEC-050, course: "MIS 110 — Intro to Missions", instructor: "Dr. E. Foster", cap: 70, enrolled: 53}
+  - {id: SEC-051, course: "PAS 110 — Pastoral Care", instructor: "Dr. E. Foster", cap: 45, enrolled: 36}
+  - {id: SEC-052, course: "MDV 201 — Hermeneutics", instructor: "Prof. G. Hayes", cap: 76, enrolled: 57}
+  - {id: SEC-053, course: "BIB 101 — Old Testament Survey", instructor: "Dr. I. Nguyen", cap: 26, enrolled: 21}
+  - {id: SEC-054, course: "MIN 320 — Foundations of Ministry", instructor: "Dr. K. Osei", cap: 11, enrolled: 8}
+  - {id: SEC-055, course: "THE 210 — Systematic Theology I", instructor: "Prof. M. Rivera", cap: 52, enrolled: 42}
+  - {id: SEC-056, course: "YMN 201 — Youth Ministry Foundations", instructor: "Dr. O. Sullivan", cap: 67, enrolled: 49}
+
+programs:
+
+  # Arts & Sciences
+  - {name: "English", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [62, 61, 60, 59, 58],
+     note: "Also carries most first-year composition sections, so major headcount understates its load."}
+  - {name: "History", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [45, 44, 43, 43, 42]}
+  - {name: "Communication", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [66, 67, 68, 70, 71]}
+  - {name: "Philosophy", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [24, 24, 24, 24, 24]}
+  - {name: "Music", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Biology", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [96, 96, 96, 96, 96]}
+  - {name: "Chemistry", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [34, 34, 34, 34, 34]}
+  - {name: "Mathematics", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 29, 29, 29]}
+  - {name: "Environmental Science", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 30, 30, 31]}
+  - {name: "Exercise Science", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [78, 79, 81, 82, 84]}
+  - {name: "Psychology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [109, 111, 114, 116, 118]}
+  - {name: "Sociology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [39, 39, 39, 39, 39]}
+  - {name: "Criminal Justice", level: Undergraduate, school: "Arts & Sciences", online: 0.26, headcount: [52, 52, 52, 52, 52]}
+  - {name: "Political Science", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [23, 23, 23, 22, 22]}
+  - {name: "MA Christian Thought", level: Graduate, school: "Arts & Sciences", online: 0.36, headcount: [19, 20, 21, 21, 22]}
+
+  # Business & Leadership
+  - {name: "Business Administration", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [128, 128, 128, 128, 128],
+     note: "Largest program. Its catalog page was last edited in Publisher by a registrar who retired in 2021."}
+  - {name: "Management & Leadership", level: Undergraduate, school: "Business & Leadership", online: 0.43, headcount: [56, 58, 59, 60, 61]}
+  - {name: "Sport Management", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [68, 70, 71, 73, 74],
+     note: "Launched Fall 2022 with a transfer cohort; athletics still calls it “the new major.”"}
+  - {name: "Accounting", level: Undergraduate, school: "Business & Leadership", online: 0.16, headcount: [32, 32, 32, 32, 32]}
+  - {name: "Marketing", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Finance", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [26, 26, 26, 26, 26]}
+  - {name: "Healthcare Administration", level: Undergraduate, school: "Business & Leadership", online: 0.46, headcount: [17, 17, 17, 18, 18],
+     note: "Two adjunct-taught sections. The clinical-partner agreement lives in a binder in the dean’s office."}
+  - {name: "MBA", level: Graduate, school: "Business & Leadership", online: 0.56, headcount: [83, 86, 89, 92, 95],
+     note: "Online cohorts start in August and January; census counts only the August start."}
+  - {name: "MS Organizational Leadership", level: Graduate, school: "Business & Leadership", online: 0.59, headcount: [42, 43, 45, 46, 48]}
+
+  # Education
+  - {name: "Elementary Education", level: Undergraduate, school: "Education", online: 0.03, headcount: [78, 78, 78, 78, 78]}
+  - {name: "Middle Grades Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [25, 25, 25, 24, 24]}
+  - {name: "Secondary Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [41, 41, 41, 41, 41]}
+  - {name: "Special Education", level: Undergraduate, school: "Education", online: 0.13, headcount: [35, 36, 37, 37, 38]}
+  - {name: "Physical Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [26, 26, 26, 26, 26]}
+  - {name: "MAT", level: Graduate, school: "Education", online: 0.3, headcount: [35, 36, 37, 39, 40]}
+  - {name: "MEd", level: Graduate, school: "Education", online: 0.49, headcount: [48, 50, 51, 53, 55]}
+  - {name: "EdD", level: Graduate, school: "Education", online: 0.59, headcount: [33, 34, 35, 37, 38]}
+
+  # Ministry & Theology
+  - {name: "Biblical Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [44, 44, 44, 44, 44]}
+  - {name: "Christian Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [58, 58, 58, 58, 58]}
+  - {name: "Missions & Intercultural Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [29, 28, 28, 27, 27],
+     note: "Mission-central. Two of the last five study-abroad partners have closed."}
+  - {name: "Youth Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [49, 49, 49, 49, 49]}
+  - {name: "Worship Leadership", level: Undergraduate, school: "Ministry & Theology", online: 0.07, headcount: [40, 41, 41, 42, 43]}
+  - {name: "Pastoral Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [36, 36, 36, 36, 36]}
+  - {name: "Christian Education", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [22, 22, 22, 21, 21]}
+  - {name: "Theology", level: Undergraduate, school: "Ministry & Theology", online: 0.1, headcount: [30, 30, 30, 30, 30]}
+  - {name: "MDiv", level: Graduate, school: "Ministry & Theology", online: 0.3, headcount: [37, 38, 39, 41, 42]}
+  - {name: "MA Biblical Studies", level: Graduate, school: "Ministry & Theology", online: 0.39, headcount: [17, 18, 19, 19, 20]}
+  - {name: "MA Christian Counseling", level: Graduate, school: "Ministry & Theology", online: 0.36, headcount: [29, 30, 31, 32, 33]}
+  - {name: "MA Worship Leadership", level: Graduate, school: "Ministry & Theology", online: 0.33, headcount: [21, 22, 22, 23, 24]}

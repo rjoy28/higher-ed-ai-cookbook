@@ -18,4 +18,6 @@
 
 **Second example:** [RCU Portfolio Explorer](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-portfolio/), where the source holds program enrollment and the recipe's own thresholds. Moving a threshold re-renders every view, which shows which findings are facts and which are settings. Source: [`rcu-portfolio.yaml`](../test-kitchen/rcu-portfolio-explorer/rcu-portfolio.yaml).
 
+**Third example:** [RCU Program Economics](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-economics/) joins three recipe inputs (enrollment, aid, sections) in one source. The join itself, a subject-to-program map and an allocation rule, sits in the same file as the data. The page reports what failed to join before it reports anything else. Source: [`rcu-economics.yaml`](../test-kitchen/rcu-program-economics/rcu-economics.yaml).
+
 *Status: draft, in the Test Kitchen.*

@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RCU Program Economics</title>
+<meta name="description" content="A fictional university's programs, net tuition, and course sections joined in one source file. See which programs bring in the revenue, which carry the teaching, and which rules decide the answer. A Higher Ed AI Cookbook fixture.">
+<meta property="og:title" content="RCU Program Economics">
+<meta property="og:description" content="Headcount is not net tuition. One source file joins programs, aid, and sections, with the allocation rules out in the open.">
+<meta property="og:image" content="https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-economics/preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Same visual system as the RCU Systems Atlas and Portfolio Explorer, so the demos read as one set. */
+:root {
+  --bg: #f4f7f8; --surface: #ffffff; --ink: #14212b; --muted: #475763; --line: #d2dbe0; --accent: #0d6670;
+  --grad: #1f5fa8; --ug: #8a4b0f;
+  --crit: #b42318; --warn: #8f5400; --ok: #1d7a3a; --band: rgba(13,102,112,.09);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e1418; --surface: #162027; --ink: #e5edf1; --muted: #a2b1ba; --line: #2b3a44; --accent: #5cc3cc;
+  --grad: #84b4ee; --ug: #e4a76a;
+  --crit: #ff8b7b; --warn: #f2b84b; --ok: #72d38f; --band: rgba(92,195,204,.12); color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 1rem; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); font-stretch: 85%; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.lede { color: var(--muted); max-width: 72ch; margin-top: 8px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 0.88rem; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 22px; border-bottom: 2px solid var(--line); }
+.tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 0.98rem var(--f-body); padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px; cursor: pointer; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+:is(.tab, button, input, textarea, a):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.panel { padding-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+
+.settings { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 14px; margin-top: 22px; }
+.settings-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.settings-note { font-size: 0.88rem; color: var(--muted); max-width: 90ch; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; }
+.slider { display: grid; gap: 2px; }
+.slider label { font-size: 0.86rem; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.slider output { font-family: var(--f-mono); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.slider output.changed { color: var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group > .lbl { font-size: 0.86rem; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.chipbtn { font: 600 0.88rem var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+.chipbtn:hover { border-color: var(--accent); }
+.chipbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn { font: 600 0.92rem var(--f-body); border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+
+.narrative { font-size: 1.12rem; max-width: 76ch; }
+.narrative + .narrative { margin-top: -10px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stat { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.stat .n { font-family: var(--f-display); font-stretch: 85%; font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-size: 0.84rem; color: var(--muted); }
+.stat.ok .n { color: var(--ok); } .stat.warn .n { color: var(--warn); } .stat.crit .n { color: var(--crit); }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.figure h3 { margin: 4px 4px 2px; }
+.figure .cap { color: var(--muted); font-size: 0.9rem; margin: 0 4px 6px; max-width: 80ch; }
+.svgbox { overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.tick { font: 12px var(--f-mono); fill: var(--muted); }
+.grid { stroke: var(--line); stroke-width: 1; }
+.axistitle { font: 600 12.5px var(--f-body); fill: var(--muted); }
+.bandrect { fill: var(--band); }
+.bandline { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.diag { stroke: var(--accent); stroke-width: 1.5; }
+.reflabel { font: 600 11.5px var(--f-mono); fill: var(--accent); }
+.pt { stroke: var(--surface); stroke-width: 1.5; }
+.pt.ug { fill: var(--ug); } .pt.grad { fill: var(--grad); }
+.pt.hollow { fill: var(--surface); stroke-width: 2; } .pt.hollow.ug { stroke: var(--ug); } .pt.hollow.grad { stroke: var(--grad); }
+.plabel { font: 600 11.5px var(--f-body); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.slope.ug { stroke: var(--ug); } .slope.grad { stroke: var(--grad); }
+.slope { stroke-width: 2; fill: none; opacity: .85; }
+.slope.dim { opacity: .3; }
+.rowlabel { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.rowlabel.dim { fill: var(--muted); font-weight: 400; }
+.colhead { font: 700 11.5px var(--f-mono); letter-spacing: .06em; fill: var(--muted); text-transform: uppercase; }
+.line-net { fill: none; stroke-width: 2.4; } .line-sticker { fill: none; stroke-width: 2; stroke-dasharray: 6 4; }
+.line-net.ug, .line-sticker.ug { stroke: var(--ug); } .line-net.grad, .line-sticker.grad { stroke: var(--grad); }
+.dot.ug { fill: var(--ug); } .dot.grad { fill: var(--grad); }
+.vlabel { font: 600 11.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { flex: none; }
+
+.section-head { display: grid; gap: 4px; }
+.section-head p { color: var(--muted); max-width: 76ch; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg); white-space: nowrap; }
+tbody th { font-weight: 600; color: var(--ink); background: none; min-width: 220px; }
+th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+th[aria-sort] button::after { content: "↕"; opacity: .45; }
+th[aria-sort="ascending"] button::after { content: "↑"; opacity: 1; }
+th[aria-sort="descending"] button::after { content: "↓"; opacity: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num { white-space: nowrap; }
+tr:last-child > * { border-bottom: 0; }
+.sub { color: var(--muted); font-size: 0.86rem; font-weight: 400; display: block; }
+.note { color: var(--ink); font-size: 0.84rem; font-weight: 400; display: block; font-style: italic; max-width: 46ch; margin-top: 0.35rem; line-height: 1.4; }
+.move { display: block; font-size: 0.84rem; font-weight: 600; }
+.move.up { color: var(--ok); } .move.down { color: var(--crit); } .move.same { color: var(--muted); font-weight: 400; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1.5px solid currentColor; white-space: nowrap; }
+.pill.ok { color: var(--ok); } .pill.crit { color: var(--crit); } .pill.warn { color: var(--warn); } .pill.muted { color: var(--muted); } .pill.tag { color: var(--accent); }
+.lvl { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+.lvl.ug { background: var(--ug); } .lvl.grad { background: var(--grad); border-radius: 50%; }
+
+.findings { display: grid; gap: 8px; }
+.finding { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.finding .stripe { background: var(--accent); }
+.finding.warn .stripe { background: var(--warn); }
+.finding .body { padding: 10px 14px; display: grid; gap: 4px; }
+.finding .top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.finding .why { color: var(--ink); font-size: 0.92rem; max-width: 80ch; }
+.empty { color: var(--muted); padding: 12px 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 82ch; }
+.callout p + p { margin-top: 6px; }
+.two-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.two-fig .svgbox svg { min-width: 420px; }
+
+textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; tab-size: 2; resize: vertical; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.status { font-size: 0.92rem; color: var(--muted); min-height: 1.5em; }
+.status.err { color: var(--crit); font-weight: 600; white-space: pre-wrap; }
+.status.ok { color: var(--ok); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px; align-items: start; }
+.schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
+.schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+.schema dd { margin: 0 0 6px; color: var(--muted); }
+footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
+@media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Test Kitchen · Higher Ed AI Cookbook</p>
+    <h1>RCU Program Economics</h1>
+    <p class="lede">The <a href="../rcu-portfolio/">Portfolio Explorer</a> sized Riverside Christian University's programs by headcount. Headcount is not revenue. This page joins three recipe inputs that usually sit apart: program enrollment, tuition and aid by segment, and the fall section schedule. The rules that join them are settings, not facts, so they are on the page where you can change them.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="settings" role="group" aria-labelledby="settings-title">
+    <div class="settings-head">
+      <h2 id="settings-title" style="font-size:1.15rem">Rules</h2>
+      <div class="group" role="group" aria-labelledby="preset-label"><span class="lbl" id="preset-label">Try</span><span id="presets" class="group"></span></div>
+    </div>
+    <p class="settings-note">Aid is reported by segment, not by program, so every program in a segment gets the same discount unless you give online students their own rate. Moving an online rate moves aid between online and campus students; the segment's total aid stays the same.</p>
+    <div class="sliders" id="sliders"></div>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-revenue" aria-controls="revenue" data-view="revenue">Revenue</button>
+    <button class="tab" role="tab" id="tab-teaching" aria-controls="teaching" data-view="teaching">Teaching load</button>
+    <button class="tab" role="tab" id="tab-source" aria-controls="source" data-view="source">Source</button>
+  </div>
+
+  <section class="panel" role="tabpanel" id="revenue" aria-labelledby="tab-revenue">
+    <p class="narrative" id="rev-narrative" aria-live="polite"></p>
+    <div class="stats" id="rev-stats"></div>
+
+    <div class="figure">
+      <h3>Largest by headcount, largest by net tuition</h3>
+      <p class="cap">Programs in the top 12 on either list, ranked both ways. A line that climbs to the right is a program that brings in more than its size suggests.</p>
+      <div class="svgbox" id="slope"></div>
+      <div class="legend" id="slope-legend"></div>
+    </div>
+
+    <div class="section-head">
+      <h2>Sticker price and net tuition</h2>
+      <p>Per student, by segment, from the aid summary. The dashed line is the sticker price. The solid line is what the university keeps after institutional aid.</p>
+    </div>
+    <p class="narrative" id="trend-narrative"></p>
+    <div class="figure"><div class="svgbox" id="trend"></div><div class="legend" id="trend-legend"></div></div>
+
+    <div class="section-head">
+      <h2>Every program</h2>
+      <p>Select a column heading to sort. Net tuition is allocated from the segment totals by the rules above, so it reconciles to the aid summary but is an estimate for any one program.</p>
+    </div>
+    <div class="tablebox"><table id="rev-table"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="teaching" aria-labelledby="tab-teaching" hidden>
+    <p class="narrative" id="teach-narrative" aria-live="polite"></p>
+    <p class="narrative" id="teach-narrative2"></p>
+    <div class="stats" id="teach-stats"></div>
+
+    <div class="figure">
+      <h3>Share of seats taught against share of net tuition</h3>
+      <p class="cap">Each program's share of enrolled seats in this term's sections, against its share of net tuition. Programs on the diagonal teach in proportion to what they bring in. Hollow marks at the left edge have no sections on record.</p>
+      <div class="svgbox" id="loadplot"></div>
+      <div class="legend" id="load-legend"></div>
+    </div>
+
+    <div class="section-head">
+      <h2>Gaps in the join</h2>
+      <p>Before reading anything into the numbers, check what did not join. A program with no sections looks like it earns revenue for free. It does not; its teaching is recorded somewhere else, or not at all.</p>
+    </div>
+    <div class="findings" id="gaps"></div>
+
+    <div class="section-head">
+      <h2>Program teaching load</h2>
+      <p>Seats per major above 1 means the program teaches students from other majors, usually through general-education or service courses.</p>
+    </div>
+    <div class="tablebox"><table id="load-table"></table></div>
+
+    <div class="section-head">
+      <h2>Sections to review</h2>
+      <p>The Course Section Viability recipe's flags, with the program each section joins to.</p>
+    </div>
+    <div class="tablebox"><table id="section-table"></table></div>
+
+    <div class="callout">
+      <p><strong>What this page does not do.</strong> It has no cost data. Seat share is not cost, and net tuition per program is an allocation. The page shows where revenue and teaching sit and which rules put them there. It does not say which programs pay for themselves.</p>
+      <p>In the recipes, an AI assistant drafts recommendations with evidence-basis tags, and people decide. A real version of this join needs the full term schedule, credit hours by major, and instructional cost, in the same source file.</p>
+    </div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="source" aria-labelledby="tab-source" hidden>
+    <div class="section-head">
+      <h2>The source</h2>
+      <p>This YAML is the whole demo. Change a headcount, remap a subject, or edit the rules, then select Apply to re-render every view. Edits stay in this browser tab until you copy them out.</p>
+    </div>
+    <div class="controls">
+      <button class="btn" id="apply" type="button">Apply changes</button>
+      <button class="btn ghost" id="reset" type="button">Reset to original</button>
+      <button class="btn ghost" id="copy" type="button">Copy YAML</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <div class="two">
+      <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-economics.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
+      <dl class="schema">
+        <dt>segments</dt><dd>Recipe 17's aid summary: headcount, gross tuition, institutional aid, and funded aid per segment, one value per year.</dd>
+        <dt>programs</dt><dd>Recipe 01's input. Each program's level must name a segment, and program headcounts must add up to the segment's, every year.</dd>
+        <dt>sections</dt><dd>Recipe 16's section export for the term.</dd>
+        <dt>subjects</dt><dd>The join. Each course prefix names the program it belongs to, or null for a course that serves several programs. Add a note when a mapping needs explaining.</dd>
+        <dt>settings</dt><dd>The rules. The sliders start here, and Recipe defaults returns to these values.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <footer>
+    <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. It matches the sample outputs of the Academic Portfolio Analyst, Net Tuition &amp; Discount Analyzer, and Course Section Viability recipes.</p>
+    <p><a href="../">All demos</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-program-economics">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+  </footer>
+</div>
+
+<script type="text/yaml" id="source-yaml">
+# RCU Program Economics: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the demo. It joins three recipe
+# inputs that are usually read on their own:
+#   programs   Academic Portfolio Analyst (01): headcount by program by year
+#   segments   Net Tuition & Discount Analyzer (17): tuition and aid by segment by year
+#   sections   Course Section Viability Analyzer (16): the Fall 2026 section export
+# and adds the two things a join needs: a subject-to-program map, and the
+# allocation rules, kept in settings so a reader can see and change them.
+#
+# Schema
+#   meta       institution, census years in order (aid years use the same order), steward
+#   settings   allocation and flag rules (see below)
+#   segments   per segment: headcount, gross tuition, institutional aid, funded aid,
+#              one value per year in meta.years
+#   subjects   course prefix -> program name, or {program: null, note} for a course
+#              that serves several programs. Add a note to explain a mapping.
+#   sections   id, course ("PRE ### — Title"), instructor, seat cap, enrolled
+#   programs   name, level (must match a segment), school, online share in the
+#              latest year, headcount by year, optional note
+#
+# Rules the page applies
+#   discount rate      institutional aid / gross tuition (recipe 17)
+#   sticker            gross tuition / headcount, per segment and year
+#   net per student    sticker x (1 - discount). One rate per segment by default.
+#   online_discount    optional, per segment. Gives online students their own rate
+#                      and solves the campus rate so the segment's aid still adds up.
+#                      null means online and campus students get the segment rate.
+#   program net        headcount x net per student, split by the program's online share
+#   seat share         a program's enrolled seats in mapped sections / all seats
+#   revenue share      a program's net tuition / all net tuition
+#   load gap           flag a program when seat share and revenue share differ by
+#                      more than load_gap. It compares two shares; it is not a cost.
+#   section flags      under-enrolled below cancel_below; near cap at near_cap fill
+#                      or above; over cap when enrolled > cap (recipe 16)
+#   reconcile          program headcount by level must equal segment headcount, every year
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-20"
+  years: [Fall 2022, Fall 2023, Fall 2024, Fall 2025, Fall 2026]
+  term: Fall 2026
+  steward: Institutional Research and Business Office
+  fixture: true
+
+settings:
+  allocation: headcount
+  online_discount: {Undergraduate: null, Graduate: null}
+  discount_goal: 0.52
+  approaching_band: 0.56
+  cancel_below: 10
+  near_cap: 0.90
+  load_gap: 0.015
+
+segments:
+  Undergraduate:
+    headcount: [1602, 1609, 1617, 1622, 1630]
+    gross_tuition: [44856000, 46017400, 47216400, 48335600, 49552000]
+    institutional_aid: [28035000, 29036979, 30076847, 31079791, 32208800]
+    funded_aid: [4205250, 4355547, 4511527, 4661969, 4831320]
+  Graduate:
+    headcount: [364, 377, 389, 403, 417]
+    gross_tuition: [6115200, 6446700, 6768600, 7133100, 7506000]
+    institutional_aid: [733824, 773604, 812232, 855972, 900720]
+    funded_aid: [110074, 116041, 121835, 128396, 135108]
+
+subjects:
+  ENG: {program: English, note: "Composition is a general-education requirement, so English teaches far more seats than it has majors."}
+  HIS: History
+  COM: Communication
+  PHI: Philosophy
+  MUS: Music
+  BIO: Biology
+  CHE: Chemistry
+  MAT: {program: Mathematics, note: "MAT means Mathematics in the schedule and the Master of Arts in Teaching in the catalog. Ask before you join on it."}
+  ENV: Environmental Science
+  EXS: Exercise Science
+  PSY: Psychology
+  SOC: Sociology
+  CRJ: Criminal Justice
+  POL: Political Science
+  BUS: Business Administration
+  MGT: Management & Leadership
+  SPM: Sport Management
+  ACC: Accounting
+  MKT: Marketing
+  FIN: Finance
+  HCA: Healthcare Administration
+  MBA: MBA
+  EDU: {program: null, note: "Education core. Every licensure program takes it, so no single program owns these seats."}
+  EDS: Secondary Education
+  SPE: Special Education
+  EDM: Middle Grades Education
+  PED: Physical Education
+  MED: MEd
+  BIB: Biblical Studies
+  MIN: Christian Ministry
+  THE: Theology
+  YMN: Youth Ministry
+  WOR: Worship Leadership
+  MIS: Missions & Intercultural Studies
+  PAS: Pastoral Ministry
+  MDV: MDiv
+
+sections:
+
+  # Arts & Sciences
+  - {id: SEC-001, course: "ENG 305 — Composition & Rhetoric", instructor: "Dr. A. Bennett", cap: 62, enrolled: 46}
+  - {id: SEC-002, course: "BIO 305 — General Biology I", instructor: "Dr. C. Delgado", cap: 21, enrolled: 18}
+  - {id: SEC-003, course: "PSY 305 — Intro to Psychology", instructor: "Dr. E. Foster", cap: 18, enrolled: 15}
+  - {id: SEC-004, course: "HIS 110 — U.S. History Survey", instructor: "Prof. G. Hayes", cap: 40, enrolled: 31}
+  - {id: SEC-005, course: "COM 201 — Public Speaking", instructor: "Dr. I. Nguyen", cap: 83, enrolled: 61}
+  - {id: SEC-006, course: "CHE 210 — General Chemistry", instructor: "Dr. A. Bennett", cap: 47, enrolled: 49}
+  - {id: SEC-007, course: "MAT 320 — College Algebra", instructor: "Prof. M. Rivera", cap: 28, enrolled: 22}
+  - {id: SEC-008, course: "EXS 101 — Anatomy & Physiology", instructor: "Dr. O. Sullivan", cap: 34, enrolled: 32}
+  - {id: SEC-009, course: "CRJ 210 — Intro to Criminal Justice", instructor: "Dr. Q. Underwood", cap: 78, enrolled: 57}
+  - {id: SEC-010, course: "SOC 110 — Intro to Sociology", instructor: "Prof. S. Whitaker", cap: 68, enrolled: 31}
+  - {id: SEC-011, course: "PHI 110 — Intro to Philosophy", instructor: "Dr. R. Coleman", cap: 44, enrolled: 32}
+  - {id: SEC-012, course: "ENV 110 — Environmental Studies", instructor: "Dr. T. Marsh", cap: 55, enrolled: 45}
+  - {id: SEC-013, course: "POL 210 — American Government", instructor: "Prof. L. Abara", cap: 68, enrolled: 32}
+  - {id: SEC-014, course: "MUS 101 — Music Theory I", instructor: "Dr. N. Petrov", cap: 22, enrolled: 17}
+  - {id: SEC-015, course: "ENG 305 — Composition & Rhetoric", instructor: "Dr. B. Cho", cap: 75, enrolled: 54}
+  - {id: SEC-016, course: "BIO 201 — General Biology I", instructor: "Prof. D. Ellison", cap: 41, enrolled: 37}
+  - {id: SEC-017, course: "PSY 320 — Intro to Psychology", instructor: "Dr. A. Bennett", cap: 64, enrolled: 54}
+  - {id: SEC-018, course: "HIS 110 — U.S. History Survey", instructor: "Dr. C. Delgado", cap: 10, enrolled: 9}
+  - {id: SEC-019, course: "COM 110 — Public Speaking", instructor: "Dr. E. Foster", cap: 123, enrolled: 58}
+  - {id: SEC-020, course: "CHE 210 — General Chemistry", instructor: "Prof. G. Hayes", cap: 65, enrolled: 60}
+
+  # Business & Leadership
+  - {id: SEC-021, course: "BUS 101 — Principles of Management", instructor: "Dr. E. Foster", cap: 46, enrolled: 43}
+  - {id: SEC-022, course: "MKT 320 — Principles of Marketing", instructor: "Dr. K. Osei", cap: 28, enrolled: 21}
+  - {id: SEC-023, course: "ACC 210 — Financial Accounting", instructor: "Prof. M. Rivera", cap: 39, enrolled: 40}
+  - {id: SEC-024, course: "FIN 201 — Corporate Finance", instructor: "Dr. O. Sullivan", cap: 52, enrolled: 25}
+  - {id: SEC-025, course: "SPM 101 — Foundations of Sport Mgmt", instructor: "Dr. Q. Underwood", cap: 32, enrolled: 25}
+  - {id: SEC-026, course: "MGT 410 — Organizational Behavior", instructor: "Dr. E. Foster", cap: 31, enrolled: 15}
+  - {id: SEC-027, course: "HCA 101 — Health Systems", instructor: "Dr. R. Coleman", cap: 71, enrolled: 52}
+  - {id: SEC-028, course: "MBA 320 — Strategic Management", instructor: "Dr. T. Marsh", cap: 64, enrolled: 61}
+  - {id: SEC-029, course: "BUS 101 — Principles of Management", instructor: "Prof. L. Abara", cap: 47, enrolled: 34}
+  - {id: SEC-030, course: "MKT 305 — Principles of Marketing", instructor: "Dr. N. Petrov", cap: 48, enrolled: 37}
+  - {id: SEC-031, course: "ACC 110 — Financial Accounting", instructor: "Dr. B. Cho", cap: 40, enrolled: 32}
+  - {id: SEC-032, course: "FIN 305 — Corporate Finance", instructor: "Prof. D. Ellison", cap: 28, enrolled: 23}
+  - {id: SEC-033, course: "SPM 320 — Foundations of Sport Mgmt", instructor: "Dr. A. Bennett", cap: 80, enrolled: 60}
+  - {id: SEC-034, course: "MGT 305 — Organizational Behavior", instructor: "Dr. C. Delgado", cap: 68, enrolled: 52}
+
+  # Education
+  - {id: SEC-035, course: "EDU 201 — Foundations of Education", instructor: "Dr. E. Foster", cap: 53, enrolled: 45}
+  - {id: SEC-036, course: "EDS 210 — Secondary Methods", instructor: "Prof. G. Hayes", cap: 9, enrolled: 8}
+  - {id: SEC-037, course: "SPE 101 — Exceptional Learners", instructor: "Dr. I. Nguyen", cap: 85, enrolled: 41}
+  - {id: SEC-038, course: "EDM 101 — Middle Grades Methods", instructor: "Dr. K. Osei", cap: 60, enrolled: 53}
+  - {id: SEC-039, course: "PED 101 — Kinesiology", instructor: "Prof. M. Rivera", cap: 13, enrolled: 16}
+  - {id: SEC-040, course: "MED 305 — Curriculum Design", instructor: "Dr. E. Foster", cap: 54, enrolled: 55}
+  - {id: SEC-041, course: "EDU 305 — Foundations of Education", instructor: "Dr. Q. Underwood", cap: 82, enrolled: 42}
+  - {id: SEC-042, course: "EDS 410 — Secondary Methods", instructor: "Prof. S. Whitaker", cap: 40, enrolled: 36}
+  - {id: SEC-043, course: "SPE 305 — Exceptional Learners", instructor: "Dr. R. Coleman", cap: 16, enrolled: 15}
+  - {id: SEC-044, course: "EDM 110 — Middle Grades Methods", instructor: "Dr. T. Marsh", cap: 34, enrolled: 29}
+
+  # Ministry & Theology
+  - {id: SEC-045, course: "BIB 201 — Old Testament Survey", instructor: "Dr. E. Foster", cap: 32, enrolled: 35}
+  - {id: SEC-046, course: "MIN 101 — Foundations of Ministry", instructor: "Dr. N. Petrov", cap: 15, enrolled: 13}
+  - {id: SEC-047, course: "THE 320 — Systematic Theology I", instructor: "Dr. B. Cho", cap: 75, enrolled: 42}
+  - {id: SEC-048, course: "YMN 210 — Youth Ministry Foundations", instructor: "Prof. D. Ellison", cap: 34, enrolled: 30}
+  - {id: SEC-049, course: "WOR 305 — Worship Leadership", instructor: "Dr. A. Bennett", cap: 45, enrolled: 41}
+  - {id: SEC-050, course: "MIS 110 — Intro to Missions", instructor: "Dr. E. Foster", cap: 70, enrolled: 53}
+  - {id: SEC-051, course: "PAS 110 — Pastoral Care", instructor: "Dr. E. Foster", cap: 45, enrolled: 36}
+  - {id: SEC-052, course: "MDV 201 — Hermeneutics", instructor: "Prof. G. Hayes", cap: 76, enrolled: 57}
+  - {id: SEC-053, course: "BIB 101 — Old Testament Survey", instructor: "Dr. I. Nguyen", cap: 26, enrolled: 21}
+  - {id: SEC-054, course: "MIN 320 — Foundations of Ministry", instructor: "Dr. K. Osei", cap: 11, enrolled: 8}
+  - {id: SEC-055, course: "THE 210 — Systematic Theology I", instructor: "Prof. M. Rivera", cap: 52, enrolled: 42}
+  - {id: SEC-056, course: "YMN 201 — Youth Ministry Foundations", instructor: "Dr. O. Sullivan", cap: 67, enrolled: 49}
+
+programs:
+
+  # Arts & Sciences
+  - {name: "English", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [62, 61, 60, 59, 58],
+     note: "Also carries most first-year composition sections, so major headcount understates its load."}
+  - {name: "History", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [45, 44, 43, 43, 42]}
+  - {name: "Communication", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [66, 67, 68, 70, 71]}
+  - {name: "Philosophy", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [24, 24, 24, 24, 24]}
+  - {name: "Music", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Biology", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [96, 96, 96, 96, 96]}
+  - {name: "Chemistry", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [34, 34, 34, 34, 34]}
+  - {name: "Mathematics", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 29, 29, 29]}
+  - {name: "Environmental Science", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 30, 30, 31]}
+  - {name: "Exercise Science", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [78, 79, 81, 82, 84]}
+  - {name: "Psychology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [109, 111, 114, 116, 118]}
+  - {name: "Sociology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [39, 39, 39, 39, 39]}
+  - {name: "Criminal Justice", level: Undergraduate, school: "Arts & Sciences", online: 0.26, headcount: [52, 52, 52, 52, 52]}
+  - {name: "Political Science", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [23, 23, 23, 22, 22]}
+  - {name: "MA Christian Thought", level: Graduate, school: "Arts & Sciences", online: 0.36, headcount: [19, 20, 21, 21, 22]}
+
+  # Business & Leadership
+  - {name: "Business Administration", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [128, 128, 128, 128, 128],
+     note: "Largest program. Its catalog page was last edited in Publisher by a registrar who retired in 2021."}
+  - {name: "Management & Leadership", level: Undergraduate, school: "Business & Leadership", online: 0.43, headcount: [56, 58, 59, 60, 61]}
+  - {name: "Sport Management", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [68, 70, 71, 73, 74],
+     note: "Launched Fall 2022 with a transfer cohort; athletics still calls it “the new major.”"}
+  - {name: "Accounting", level: Undergraduate, school: "Business & Leadership", online: 0.16, headcount: [32, 32, 32, 32, 32]}
+  - {name: "Marketing", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Finance", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [26, 26, 26, 26, 26]}
+  - {name: "Healthcare Administration", level: Undergraduate, school: "Business & Leadership", online: 0.46, headcount: [17, 17, 17, 18, 18],
+     note: "Two adjunct-taught sections. The clinical-partner agreement lives in a binder in the dean’s office."}
+  - {name: "MBA", level: Graduate, school: "Business & Leadership", online: 0.56, headcount: [83, 86, 89, 92, 95],
+     note: "Online cohorts start in August and January; census counts only the August start."}
+  - {name: "MS Organizational Leadership", level: Graduate, school: "Business & Leadership", online: 0.59, headcount: [42, 43, 45, 46, 48]}
+
+  # Education
+  - {name: "Elementary Education", level: Undergraduate, school: "Education", online: 0.03, headcount: [78, 78, 78, 78, 78]}
+  - {name: "Middle Grades Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [25, 25, 25, 24, 24]}
+  - {name: "Secondary Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [41, 41, 41, 41, 41]}
+  - {name: "Special Education", level: Undergraduate, school: "Education", online: 0.13, headcount: [35, 36, 37, 37, 38]}
+  - {name: "Physical Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [26, 26, 26, 26, 26]}
+  - {name: "MAT", level: Graduate, school: "Education", online: 0.3, headcount: [35, 36, 37, 39, 40]}
+  - {name: "MEd", level: Graduate, school: "Education", online: 0.49, headcount: [48, 50, 51, 53, 55]}
+  - {name: "EdD", level: Graduate, school: "Education", online: 0.59, headcount: [33, 34, 35, 37, 38]}
+
+  # Ministry & Theology
+  - {name: "Biblical Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [44, 44, 44, 44, 44]}
+  - {name: "Christian Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [58, 58, 58, 58, 58]}
+  - {name: "Missions & Intercultural Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [29, 28, 28, 27, 27],
+     note: "Mission-central. Two of the last five study-abroad partners have closed."}
+  - {name: "Youth Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [49, 49, 49, 49, 49]}
+  - {name: "Worship Leadership", level: Undergraduate, school: "Ministry & Theology", online: 0.07, headcount: [40, 41, 41, 42, 43]}
+  - {name: "Pastoral Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [36, 36, 36, 36, 36]}
+  - {name: "Christian Education", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [22, 22, 22, 21, 21]}
+  - {name: "Theology", level: Undergraduate, school: "Ministry & Theology", online: 0.1, headcount: [30, 30, 30, 30, 30]}
+  - {name: "MDiv", level: Graduate, school: "Ministry & Theology", online: 0.3, headcount: [37, 38, 39, 41, 42]}
+  - {name: "MA Biblical Studies", level: Graduate, school: "Ministry & Theology", online: 0.39, headcount: [17, 18, 19, 19, 20]}
+  - {name: "MA Christian Counseling", level: Graduate, school: "Ministry & Theology", online: 0.36, headcount: [29, 30, 31, 32, 33]}
+  - {name: "MA Worship Leadership", level: Graduate, school: "Ministry & Theology", online: 0.33, headcount: [21, 22, 22, 23, 24]}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" integrity="sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const MINUS = "−";
+  const pct = (x, d = 1, sign = false) => x == null || !isFinite(x) ? "n/a" : (x < 0 ? MINUS : sign && x > 0 ? "+" : "") + Math.abs(x * 100).toFixed(d) + "%";
+  const int = (n) => Math.round(Number(n)).toLocaleString();
+  const money = (n) => (n < 0 ? MINUS : "") + "$" + Math.round(Math.abs(n)).toLocaleString();
+  const big = (n) => { const a = Math.abs(n), s = n < 0 ? MINUS : ""; return a >= 1e6 ? s + "$" + (a / 1e6).toFixed(a >= 1e7 ? 1 : 2) + "M" : a >= 1e3 ? s + "$" + Math.round(a / 1e3) + "K" : s + "$" + Math.round(a); };
+  const signedMoney = (n) => (n > 0 ? "+" : "") + big(n);
+  const ORIGINAL = $("source-yaml").textContent.replace(/^\n/, "");
+  const isUG = (lv) => /^under/i.test(lv);
+  const lvCls = (lv) => (isUG(lv) ? "ug" : "grad");
+
+  // ---- Model -----------------------------------------------------------
+  const NUM_KEYS = ["discount_goal", "approaching_band", "cancel_below", "near_cap", "load_gap"];
+  function build(text) {
+    if (typeof jsyaml === "undefined") throw new Error("The YAML parser did not load. Check your connection and reload the page.");
+    const d = jsyaml.load(text);
+    if (!d || typeof d !== "object") throw new Error("The source is empty.");
+    const meta = d.meta || {}, years = meta.years;
+    if (!Array.isArray(years) || years.length < 2) throw new Error("meta.years needs at least two years.");
+    const n = years.length;
+    const st = Object.assign({}, d.settings || {});
+    NUM_KEYS.forEach((k) => { if (typeof st[k] !== "number" || !isFinite(st[k])) throw new Error("settings." + k + " must be a number."); });
+
+    if (!d.segments || typeof d.segments !== "object") throw new Error("segments is missing.");
+    const segments = {};
+    Object.entries(d.segments).forEach(([k, s]) => {
+      ["headcount", "gross_tuition", "institutional_aid"].forEach((f) => {
+        if (!s || !Array.isArray(s[f]) || s[f].length !== n || s[f].some((v) => typeof v !== "number" || v < 0)) throw new Error("segments." + k + "." + f + " needs " + n + " numbers, one per year.");
+      });
+      segments[k] = { hc: s.headcount, gross: s.gross_tuition, aid: s.institutional_aid, funded: Array.isArray(s.funded_aid) ? s.funded_aid : null };
+    });
+
+    if (!Array.isArray(d.programs) || !d.programs.length) throw new Error("programs needs at least one entry.");
+    const seen = new Set();
+    const programs = d.programs.map((p, i) => {
+      const where = "programs[" + i + "]" + (p && p.name ? " (" + p.name + ")" : "");
+      if (!p || !p.name) throw new Error(where + " needs a name.");
+      if (!segments[p.level]) throw new Error(where + ": level \"" + p.level + "\" is not a segment. Segments: " + Object.keys(segments).join(", ") + ".");
+      if (seen.has(p.name)) throw new Error(where + " appears twice."); seen.add(p.name);
+      if (!Array.isArray(p.headcount) || p.headcount.length !== n) throw new Error(where + ": headcount needs " + n + " values.");
+      return { name: String(p.name), level: p.level, school: String(p.school || ""), online: typeof p.online === "number" ? Math.min(1, Math.max(0, p.online)) : 0, hc: p.headcount.map((h) => h || 0), note: p.note ? String(p.note) : "" };
+    });
+
+    const subjects = {};
+    Object.entries(d.subjects || {}).forEach(([pre, v]) => {
+      const o = typeof v === "string" ? { program: v } : (v || {});
+      if (o.program != null && !seen.has(o.program)) throw new Error("subjects." + pre + " names \"" + o.program + "\", which is not a program.");
+      subjects[pre] = { program: o.program ?? null, note: o.note ? String(o.note) : "" };
+    });
+
+    if (!Array.isArray(d.sections)) throw new Error("sections needs a list.");
+    const sections = d.sections.map((s, i) => {
+      const where = "sections[" + i + "]" + (s && s.id ? " (" + s.id + ")" : "");
+      if (!s || !s.id || !s.course) throw new Error(where + " needs an id and a course.");
+      if (typeof s.cap !== "number" || typeof s.enrolled !== "number") throw new Error(where + " needs a numeric cap and enrolled.");
+      const m = String(s.course).match(/^([A-Za-z]{2,5})\s*\d/);
+      return { id: String(s.id), course: String(s.course), instructor: String(s.instructor || ""), cap: s.cap, enrolled: s.enrolled, prefix: m ? m[1].toUpperCase() : "" };
+    });
+
+    const online = {};
+    Object.keys(segments).forEach((k) => { const v = (st.online_discount || {})[k]; online[k] = typeof v === "number" ? v : null; });
+    const M = { meta, years, segments, programs, subjects, sections };
+    M.onlineMax = {};
+    Object.keys(segments).forEach((k) => (M.onlineMax[k] = onlineMax(M, k)));
+    Object.keys(segments).forEach((k) => {
+      if (online[k] != null && online[k] > M.onlineMax[k] + 1e-9) throw new Error("settings.online_discount." + k + " is " + pct(online[k], 1) + ", but campus aid would drop below zero. The highest rate that still adds up is " + pct(M.onlineMax[k], 1) + ".");
+    });
+    M.defaults = { online, discount_goal: st.discount_goal, approaching_band: st.approaching_band, cancel_below: st.cancel_below, near_cap: st.near_cap, load_gap: st.load_gap };
+    return M;
+  }
+
+  // Online headcount in a segment for year i, using each program's latest online share.
+  const onlineHC = (M, k, i) => M.programs.filter((p) => p.level === k).reduce((s, p) => s + p.online * p.hc[i], 0);
+  function onlineMax(M, k) {
+    const g = M.segments[k]; let mx = 1;
+    M.years.forEach((_, i) => { const non = onlineHC(M, k, i); if (non > 0 && g.gross[i] > 0) mx = Math.min(mx, (g.aid[i] / (g.gross[i] / g.hc[i])) / non); });
+    return Math.max(0, mx);
+  }
+
+  function evaluate(M, S) {
+    const n = M.years.length, last = n - 1;
+    // Segment economics, with campus and online rates that reconcile to the segment's aid.
+    const seg = {};
+    Object.entries(M.segments).forEach(([k, g]) => {
+      seg[k] = M.years.map((_, i) => {
+        const sticker = g.hc[i] ? g.gross[i] / g.hc[i] : 0, disc = g.gross[i] ? g.aid[i] / g.gross[i] : 0;
+        const non = onlineHC(M, k, i), ncam = g.hc[i] - non;
+        const dOn = S.online[k] == null ? disc : S.online[k];
+        const dCam = S.online[k] == null || ncam <= 0 ? disc : (g.aid[i] / sticker - non * dOn) / ncam;
+        return { hc: g.hc[i], gross: g.gross[i], aid: g.aid[i], net: g.gross[i] - g.aid[i], sticker, disc, netPer: g.hc[i] ? (g.gross[i] - g.aid[i]) / g.hc[i] : 0, dOn, dCam };
+      });
+    });
+    const totals = M.years.map((_, i) => Object.values(seg).reduce((a, s) => ({ hc: a.hc + s[i].hc, gross: a.gross + s[i].gross, aid: a.aid + s[i].aid, net: a.net + s[i].net }), { hc: 0, gross: 0, aid: 0, net: 0 }));
+
+    // Programs
+    const rows = M.programs.map((p) => {
+      const net = p.hc.map((h, i) => { const s = seg[p.level][i]; return h * s.sticker * (1 - (p.online * s.dOn + (1 - p.online) * s.dCam)); });
+      return Object.assign({}, p, { now: p.hc[last], net, netNow: net[last], netPer: p.hc[last] ? net[last] / p.hc[last] : 0, netChange: net[last] - net[0] });
+    });
+    const totNet = rows.reduce((s, r) => s + r.netNow, 0), totHC = rows.reduce((s, r) => s + r.now, 0);
+    const rank = (key) => { const o = rows.slice().sort((a, b) => b[key] - a[key] || a.name.localeCompare(b.name)); o.forEach((r, i) => (r[key + "Rank"] = i + 1)); };
+    rows.forEach((r) => { r.ntShare = totNet ? r.netNow / totNet : 0; r.hcShare = totHC ? r.now / totHC : 0; });
+    rank("now"); rank("netNow");
+
+    // Reconcile program headcount to segment headcount, every year.
+    const recon = [];
+    Object.entries(M.segments).forEach(([k, g]) => M.years.forEach((y, i) => {
+      const sum = rows.filter((r) => r.level === k).reduce((s, r) => s + r.hc[i], 0);
+      if (sum !== g.hc[i]) recon.push({ seg: k, year: y, programs: sum, segment: g.hc[i] });
+    }));
+
+    // Sections joined to programs through the subject map.
+    const byName = new Map(rows.map((r) => [r.name, r]));
+    rows.forEach((r) => Object.assign(r, { sections: 0, cap: 0, seats: 0, under: 0, over: 0 }));
+    let totSeats = 0, totCap = 0, sharedSeats = 0;
+    const unmapped = new Map(), shared = new Map();
+    const secs = M.sections.map((s) => {
+      const sub = M.subjects[s.prefix];
+      const program = sub && sub.program ? sub.program : null;
+      const fill = s.cap ? s.enrolled / s.cap : null;
+      const flag = s.enrolled > s.cap ? "Over cap" : s.enrolled < S.cancel_below ? "Under-enrolled" : fill != null && fill >= S.near_cap ? "Near cap" : "";
+      totSeats += s.enrolled; totCap += s.cap;
+      if (program) { const r = byName.get(program); r.sections++; r.cap += s.cap; r.seats += s.enrolled; if (flag === "Under-enrolled") r.under++; if (flag === "Over cap") r.over++; }
+      else if (sub) { sharedSeats += s.enrolled; shared.set(s.prefix, (shared.get(s.prefix) || 0) + s.enrolled); }
+      else unmapped.set(s.prefix || "(no prefix)", (unmapped.get(s.prefix || "(no prefix)") || 0) + s.enrolled);
+      return Object.assign({}, s, { program, fill, flag });
+    });
+    rows.forEach((r) => {
+      r.seatShare = totSeats ? r.seats / totSeats : 0;
+      r.gap = r.seatShare - r.ntShare;
+      r.perMajor = r.now ? r.seats / r.now : null;
+      r.read = !r.sections ? "No sections" : r.gap > S.load_gap ? "Seat share higher" : r.gap < -S.load_gap ? "Revenue share higher" : "In line";
+    });
+    return { seg, totals, rows, totNet, totHC, recon, secs, totSeats, totCap, sharedSeats, shared, unmapped, last };
+  }
+
+  // ---- State -----------------------------------------------------------
+  let M, S, revSort = "netNow", revDir = -1, loadSort = "gap", loadDir = -1;
+  const sliderDefs = () => [
+    ...Object.keys(M.segments).map((k) => ({ k: "online:" + k, label: (isUG(k) ? "Undergraduate" : k) + " online aid rate", min: 0, max: Math.floor(M.onlineMax[k] * 200) / 200, step: 0.005,
+      get: () => S.online[k], set: (v) => (S.online[k] = v), def: () => M.defaults.online[k],
+      fmt: (v) => v == null ? "Segment rate" : pct(v, 1), valueOf: (v) => (v == null ? lastDisc(k) : v) })),
+    { k: "discount_goal", label: "Discount goal", min: 0.3, max: 0.7, step: 0.005, fmt: (v) => pct(v, 1) },
+    { k: "cancel_below", label: "Under-enrolled below", min: 2, max: 25, step: 1, fmt: (v) => int(v) + " students" },
+    { k: "near_cap", label: "Near cap at", min: 0.7, max: 1, step: 0.01, fmt: (v) => pct(v, 0) + " full" },
+    { k: "load_gap", label: "Flag a share gap over", min: 0.005, max: 0.04, step: 0.0025, fmt: (v) => (v * 100).toFixed(2).replace(/0$/, "") + " pts" },
+  ];
+  const lastDisc = (k) => { const g = M.segments[k], i = M.years.length - 1; return g.gross[i] ? g.aid[i] / g.gross[i] : 0; };
+  const getS = (d) => d.get ? d.get() : S[d.k];
+  const defS = (d) => d.def ? d.def() : M.defaults[d.k];
+  const PRESETS = () => [
+    { id: "defaults", label: "Recipe defaults", set: {} },
+    { id: "online", label: "Online students aided less", set: { online: Object.fromEntries(Object.keys(M.segments).map((k) => [k, Math.min(M.onlineMax[k], Math.round(lastDisc(k) * 0.55 * 200) / 200)])) } },
+    { id: "strict", label: "Stricter section review", set: { cancel_below: 15, near_cap: 0.85 } },
+  ];
+  const presetState = (p) => Object.assign({}, M.defaults, p.set, { online: Object.assign({}, M.defaults.online, p.set.online || {}) });
+  const same = (a, b) => NUM_KEYS.every((k) => Math.abs(a[k] - b[k]) < 1e-9) && Object.keys(M.segments).every((k) => (a.online[k] == null && b.online[k] == null) || (a.online[k] != null && b.online[k] != null && Math.abs(a.online[k] - b.online[k]) < 1e-9));
+  const cloneS = (x) => Object.assign({}, x, { online: Object.assign({}, x.online) });
+
+  // ---- Helpers ---------------------------------------------------------
+  const stat = (n, k, cls) => '<div class="stat ' + (cls || "") + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>";
+  const lvl = (lv) => '<span class="lvl ' + lvCls(lv) + '" aria-hidden="true"></span>';
+  const levelShort = (l) => (isUG(l) ? "Undergraduate" : "Graduate");
+  const progCell = (r) => '<th scope="row">' + esc(r.name) + '<span class="sub">' + lvl(r.level) + esc(r.school) + " · " + esc(levelShort(r.level)) + "</span>" + (r.note ? '<span class="note">' + esc(r.note) + "</span>" : "") + "</th>";
+  const mark = (lv, x, y, r, hollow) => {
+    const c = 'class="pt ' + lvCls(lv) + (hollow ? " hollow" : "") + '"';
+    return isUG(lv) ? '<circle ' + c + ' cx="' + x + '" cy="' + y + '" r="' + r + '"/>' : '<path ' + c + ' d="M' + x + "," + (y - r * 1.3) + " L" + (x + r * 1.3) + "," + y + " L" + x + "," + (y + r * 1.3) + " L" + (x - r * 1.3) + "," + y + 'Z"/>';
+  };
+  const levelLegend = () => '<span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true">' + mark("Undergraduate", 0, 0, 5) + "</svg>Undergraduate</span>" +
+    '<span><svg width="16" height="16" viewBox="-8 -8 16 16" aria-hidden="true">' + mark("Graduate", 0, 0, 5) + "</svg>Graduate</span>";
+  function sortHead(cols, key, dir, tableId) {
+    return "<thead><tr>" + cols.map((c) => {
+      const s = c.sortable === false ? "" : ' aria-sort="' + (c.k === key ? (dir < 0 ? "descending" : "ascending") : "none") + '"';
+      return '<th scope="col"' + (c.num ? ' class="num"' : "") + s + ">" + (c.sortable === false ? esc(c.label) : '<button type="button" data-table="' + tableId + '" data-sort="' + c.k + '">' + esc(c.label) + "</button>") + "</th>";
+    }).join("") + "</tr></thead>";
+  }
+  const sorter = (cols, key, dir) => { const c = cols.find((x) => x.k === key) || cols[0]; return (a, b) => { const x = c.get(a), y = c.get(b); return (x < y ? -1 : x > y ? 1 : 0) * dir || b.netNow - a.netNow; }; };
+
+  // ---- Settings UI -------------------------------------------------------
+  function renderSliders() {
+    $("sliders").innerHTML = sliderDefs().map((s) =>
+      '<div class="slider"><label for="s-' + s.k + '"><span>' + esc(s.label) + '</span><output id="o-' + s.k + '" for="s-' + s.k + '"></output></label>' +
+      '<input type="range" id="s-' + s.k + '" data-k="' + s.k + '" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '"></div>').join("");
+    $("presets").innerHTML = PRESETS().map((p) => '<button type="button" class="chipbtn" data-preset="' + p.id + '" aria-pressed="false">' + esc(p.label) + "</button>").join("");
+  }
+  function syncControls() {
+    sliderDefs().forEach((s) => {
+      const el = $("s-" + s.k), o = $("o-" + s.k), v = getS(s);
+      const shown = s.valueOf ? s.valueOf(v) : v;
+      el.value = shown;
+      const txt = s.fmt(v) + (s.valueOf && v == null ? " (" + pct(shown, 1) + ")" : "");
+      el.setAttribute("aria-valuetext", txt); o.textContent = txt;
+      const d = defS(s);
+      o.classList.toggle("changed", !((v == null && d == null) || (v != null && d != null && Math.abs(v - d) < 1e-9)));
+    });
+    document.querySelectorAll("[data-preset]").forEach((b) => b.setAttribute("aria-pressed", String(same(S, presetState(PRESETS().find((p) => p.id === b.dataset.preset))))));
+  }
+
+  // ---- Revenue ---------------------------------------------------------
+  function renderRevenue(E) {
+    const last = E.last, segKeys = Object.keys(E.seg);
+    const ugK = segKeys.find(isUG), grK = segKeys.find((k) => !isUG(k));
+    const ug = E.seg[ugK][last], gr = grK ? E.seg[grK][last] : null;
+    const grRows = E.rows.filter((r) => !isUG(r.level));
+    const grHC = grRows.reduce((s, r) => s + r.now, 0), grNT = grRows.reduce((s, r) => s + r.netNow, 0);
+    const topNT = E.rows.find((r) => r.netNowRank === 1), topHC = E.rows.find((r) => r.nowRank === 1);
+    const movers = E.rows.filter((r) => r.nowRank - r.netNowRank >= 5);
+    const allSeg = Object.values(E.seg).every((s) => s[last].dOn === s[last].dCam);
+    let s = allSeg
+      ? "At one discount rate per segment, an undergraduate brings in <strong>" + money(ug.netPer) + "</strong> in net tuition and a graduate student <strong>" + money(gr ? gr.netPer : 0) + "</strong>. "
+      : "With online students aided at " + segKeys.map((k) => pct(E.seg[k][last].dOn, 1) + " (" + (isUG(k) ? "undergraduate" : "graduate") + ")").join(" and ") + ", campus students' rates rise to " + segKeys.map((k) => pct(E.seg[k][last].dCam, 1)).join(" and ") + " so each segment's aid still adds up. Programs with more online students move up. ";
+    if (grK) s += "Graduate programs hold <strong>" + pct(grHC / E.totHC, 0) + " of headcount and " + pct(grNT / E.totNet, 0) + " of net tuition</strong>. ";
+    if (topNT !== topHC) s += "<strong>" + esc(topNT.name) + "</strong>, the " + ordinal(topNT.nowRank) + "-largest program, brings in the most net tuition: " + big(topNT.netNow) + ", ahead of " + esc(topHC.name) + " with " + int(topHC.now) + " students.";
+    else s += esc(topNT.name) + " is the largest program by headcount and by net tuition.";
+    $("rev-narrative").innerHTML = s;
+    if (movers.length) $("rev-narrative").innerHTML += " " + movers.length + " program" + (movers.length === 1 ? " climbs" : "s climb") + " five or more places when ranked by revenue instead of size" + (movers.every((r) => !isUG(r.level)) ? ", all of them graduate." : ".");
+
+    const T = E.totals[last], instDisc = T.gross ? T.aid / T.gross : 0;
+    const dCls = instDisc <= S.discount_goal ? "ok" : instDisc <= M.defaults.approaching_band ? "warn" : "crit";
+    $("rev-stats").innerHTML = stat(big(E.totNet), "Net tuition, " + M.years[last]) + stat(money(ug.netPer), "Net per undergraduate") + (gr ? stat(money(gr.netPer), "Net per graduate student") : "") +
+      (grK ? stat(pct(grHC / E.totHC, 0) + " / " + pct(grNT / E.totNet, 0), "Graduate share of headcount / net tuition") : "") +
+      stat(pct(instDisc, 1), "Discount rate; goal " + pct(S.discount_goal, 0), dCls);
+
+    $("slope").innerHTML = slopeSVG(E);
+    $("slope-legend").innerHTML = '<span><svg width="24" height="10" aria-hidden="true"><line x1="0" x2="24" y1="5" y2="5" class="slope ug"/></svg>Undergraduate</span><span><svg width="24" height="10" aria-hidden="true"><line x1="0" x2="24" y1="5" y2="5" class="slope grad" stroke-dasharray="5 3"/></svg>Graduate</span>';
+
+    // Trend
+    const tr = segKeys.map((k) => { const a = E.seg[k][0], b = E.seg[k][last]; return { k, sticker: b.sticker / a.sticker - 1, net: b.netPer / a.netPer - 1, d0: a.disc, d1: b.disc }; });
+    const u = tr.find((t) => isUG(t.k));
+    let t = "Since " + esc(M.years[0]) + ", the undergraduate sticker price rose <strong>" + pct(u.sticker, 1) + "</strong> and net tuition per undergraduate rose <strong>" + pct(u.net, 1) + "</strong>. ";
+    t += u.d1 > u.d0 + 0.001 ? "The discount went from " + pct(u.d0, 1) + " to " + pct(u.d1, 1) + " and absorbed most of the increase." : "The discount held at about " + pct(u.d1, 1) + ".";
+    const g = tr.find((x) => !isUG(x.k));
+    if (g) t += " Graduate net tuition per student rose " + pct(g.net, 1) + ", with the discount " + (Math.abs(g.d1 - g.d0) < 0.001 ? "steady at " + pct(g.d1, 1) : "moving from " + pct(g.d0, 1) + " to " + pct(g.d1, 1)) + ".";
+    $("trend-narrative").innerHTML = t;
+    $("trend").innerHTML = trendSVG(E);
+    $("trend-legend").innerHTML = '<span><svg width="26" height="10" aria-hidden="true"><line x1="0" x2="26" y1="5" y2="5" class="line-sticker ug"/></svg>Sticker price per student</span><span><svg width="26" height="10" aria-hidden="true"><line x1="0" x2="26" y1="5" y2="5" class="line-net ug"/></svg>Net tuition per student</span>' + levelLegend();
+
+    renderRevTable(E);
+  }
+  const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+
+  function slopeSVG(E) {
+    const K = 12;
+    const pick = E.rows.filter((r) => r.nowRank <= K || r.netNowRank <= K);
+    const maxRank = Math.max(...pick.map((r) => Math.max(r.nowRank, r.netNowRank)));
+    const W = 940, T = 40, rowH = 24, H = T + maxRank * rowH + 12, xL = 330, xR = 610;
+    const Y = (rk) => T + (rk - 0.5) * rowH;
+    let g = '<text class="colhead" x="' + xL + '" y="18" text-anchor="end">By headcount, ' + esc(M.years[E.last]) + '</text><text class="colhead" x="' + xR + '" y="18">By net tuition</text>';
+    const all = E.rows;
+    for (let rk = 1; rk <= maxRank; rk++) {
+      const a = all.find((r) => r.nowRank === rk), b = all.find((r) => r.netNowRank === rk);
+      const inA = pick.includes(a), inB = pick.includes(b);
+      g += '<text class="rowlabel' + (inA ? "" : " dim") + '" x="' + (xL - 12) + '" y="' + (Y(rk) + 4) + '" text-anchor="end">' + rk + ". " + esc(a.name) + " · " + int(a.now) + "</text>";
+      g += '<text class="rowlabel' + (inB ? "" : " dim") + '" x="' + (xR + 12) + '" y="' + (Y(rk) + 4) + '">' + rk + ". " + esc(b.name) + " · " + big(b.netNow) + "</text>";
+    }
+    pick.forEach((r) => {
+      const moved = r.nowRank - r.netNowRank;
+      g += '<g><line class="slope ' + lvCls(r.level) + (moved === 0 ? " dim" : "") + '" x1="' + xL + '" x2="' + xR + '" y1="' + Y(r.nowRank) + '" y2="' + Y(r.netNowRank) + '"' + (isUG(r.level) ? "" : ' stroke-dasharray="5 3"') + "/>" +
+        mark(r.level, xL, Y(r.nowRank), 4) + mark(r.level, xR, Y(r.netNowRank), 4) +
+        "<title>" + esc(r.name + ": " + ordinal(r.nowRank) + " by headcount (" + int(r.now) + "), " + ordinal(r.netNowRank) + " by net tuition (" + big(r.netNow) + ")") + "</title></g>";
+    });
+    const label = "Slope chart ranking programs by headcount and by net tuition. " + pick.slice().sort((a, b) => a.netNowRank - b.netNowRank).map((r) => r.name + " " + ordinal(r.nowRank) + " by headcount, " + ordinal(r.netNowRank) + " by net tuition").join("; ") + ".";
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+
+  function trendSVG(E) {
+    const keys = Object.keys(E.seg), W = 940, H = 300, L = 70, R = 170, T = 22, B = 40;
+    const vals = keys.flatMap((k) => E.seg[k].flatMap((s) => [s.sticker, s.netPer]));
+    const hi = Math.ceil(Math.max(...vals) / 5000) * 5000, X = (i) => L + (i * (W - L - R)) / (M.years.length - 1), Y = (v) => T + (1 - v / hi) * (H - T - B);
+    let g = "";
+    for (let v = 0; v <= hi; v += 5000) g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/><text class="tick" x="' + (L - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end">$' + v / 1000 + "K</text>";
+    M.years.forEach((y, i) => (g += '<text class="tick" x="' + X(i) + '" y="' + (H - B + 18) + '" text-anchor="middle">' + esc(y) + "</text>"));
+    const ends = [];
+    keys.forEach((k) => {
+      const c = lvCls(k), s = E.seg[k];
+      const path = (f) => s.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(p[f]).toFixed(1)).join(" ");
+      g += '<path class="line-sticker ' + c + '" d="' + path("sticker") + '"/><path class="line-net ' + c + '" d="' + path("netPer") + '"/>';
+      s.forEach((p, i) => (g += mark(k, +X(i).toFixed(1), +Y(p.netPer).toFixed(1), 3.5)));
+      const l = s[s.length - 1];
+      ends.push({ y: Y(l.sticker), t: (isUG(k) ? "UG" : "Grad") + " sticker " + money(l.sticker) }, { y: Y(l.netPer), t: (isUG(k) ? "UG" : "Grad") + " net " + money(l.netPer) });
+    });
+    ends.sort((a, b) => a.y - b.y); ends.forEach((e, i) => { if (i && e.y - ends[i - 1].y < 15) e.y = ends[i - 1].y + 15; g += '<text class="vlabel" x="' + (W - R + 8) + '" y="' + (e.y + 4).toFixed(1) + '">' + esc(e.t) + "</text>"; });
+    const label = "Line chart of sticker price and net tuition per student by segment, " + M.years[0] + " to " + M.years[M.years.length - 1] + ". " + keys.map((k) => { const a = E.seg[k][0], b = E.seg[k][E.last]; return k + ": sticker " + money(a.sticker) + " to " + money(b.sticker) + ", net " + money(a.netPer) + " to " + money(b.netPer); }).join("; ") + ".";
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+
+  const REV_COLS = [
+    { k: "name", label: "Program", get: (r) => r.name.toLowerCase() },
+    { k: "now", label: "Headcount", num: true, get: (r) => r.now },
+    { k: "netNow", label: "Net tuition", num: true, get: (r) => r.netNow },
+    { k: "move", label: "Rank shift", num: true, get: (r) => r.nowRank - r.netNowRank },
+    { k: "netPer", label: "Net per student", num: true, get: (r) => r.netPer },
+    { k: "ntShare", label: "Share", num: true, get: (r) => r.ntShare },
+    { k: "netChange", label: "", num: true, get: (r) => r.netChange },
+    { k: "online", label: "Online", num: true, get: (r) => r.online },
+  ];
+  function renderRevTable(E) {
+    REV_COLS[6].label = "Since " + M.years[0];
+    const rows = E.rows.slice().sort(sorter(REV_COLS, revSort, revDir));
+    const col = REV_COLS.find((c) => c.k === revSort);
+    let h = "<caption class='sr'>Every program's allocated net tuition, sorted by " + esc(col.label) + (revDir < 0 ? ", highest first" : ", lowest first") + ".</caption>" + sortHead(REV_COLS, revSort, revDir, "rev") + "<tbody>";
+    rows.forEach((r) => {
+      const mv = r.nowRank - r.netNowRank;
+      h += "<tr>" + progCell(r) + '<td class="num">' + int(r.now) + '</td><td class="num"><strong>' + money(r.netNow) + "</strong></td>" +
+        '<td class="num">' + r.nowRank + " → " + r.netNowRank + '<span class="move ' + (mv > 0 ? "up" : mv < 0 ? "down" : "same") + '">' + (mv > 0 ? "▲ up " + mv : mv < 0 ? "▼ down " + -mv : "no change") + "</span></td>" +
+        '<td class="num">' + money(r.netPer) + '</td><td class="num">' + pct(r.ntShare, 1) + '</td><td class="num">' + signedMoney(r.netChange) + '<span class="sub">' + pct(r.net[0] ? r.netChange / r.net[0] : null, 1, true) + '</span></td><td class="num">' + pct(r.online, 0) + "</td></tr>";
+    });
+    $("rev-table").innerHTML = h + "</tbody>";
+  }
+
+  // ---- Teaching load -----------------------------------------------------
+  function renderTeaching(E) {
+    const joined = E.rows.filter((r) => r.sections > 0), none = E.rows.filter((r) => !r.sections);
+    const gradNone = none.filter((r) => !isUG(r.level)).length, gradAll = E.rows.filter((r) => !isUG(r.level)).length;
+    const flagged = E.secs.filter((s) => s.flag);
+    const n = (f) => E.secs.filter((s) => s.flag === f).length;
+    let s = "This term's export has <strong>" + E.secs.length + " sections and " + int(E.totSeats) + " enrolled seats</strong>. It joins to <strong>" + joined.length + " of " + E.rows.length + " programs</strong>.";
+    if (none.length) s += " " + none.length + " ha" + (none.length === 1 ? "s" : "ve") + " no sections on record" + (gradNone ? ", including " + gradNone + " of " + gradAll + " graduate programs" : "") + ".";
+    if (E.sharedSeats) s += " " + int(E.sharedSeats) + " seats sit in courses that serve several programs.";
+    $("teach-narrative").innerHTML = s;
+    const hiLoad = joined.slice().sort((a, b) => b.gap - a.gap)[0], hiRev = none.slice().sort((a, b) => b.netNow - a.netNow)[0];
+    let s2 = "";
+    if (hiLoad && hiLoad.gap > S.load_gap) s2 += "<strong>" + esc(hiLoad.name) + "</strong> teaches " + pct(hiLoad.seatShare, 1) + " of the seats on record and brings in " + pct(hiLoad.ntShare, 1) + " of net tuition. That is what a service department looks like, not a problem by itself. ";
+    if (hiRev) s2 += "<strong>" + esc(hiRev.name) + "</strong> brings in " + pct(hiRev.ntShare, 1) + " of net tuition with no sections on record. Find out where its teaching is recorded before you read anything into that.";
+    $("teach-narrative2").innerHTML = s2; $("teach-narrative2").hidden = !s2;
+
+    $("teach-stats").innerHTML = stat(E.secs.length, "Sections, " + (M.meta.term || "this term")) + stat(pct(E.totCap ? E.totSeats / E.totCap : 0, 0), int(E.totSeats) + " of " + int(E.totCap) + " seats filled") +
+      stat(n("Under-enrolled"), "Under " + S.cancel_below + " students", n("Under-enrolled") ? "warn" : "") + stat(n("Over cap"), "Over cap", n("Over cap") ? "crit" : "") +
+      stat(joined.length + " / " + E.rows.length, "Programs with sections", none.length ? "warn" : "ok") + stat(int(E.sharedSeats), "Seats in shared courses");
+
+    $("loadplot").innerHTML = loadSVG(E);
+    $("load-legend").innerHTML = levelLegend() + '<span><svg width="16" height="16" viewBox="-8 -8 16 16" aria-hidden="true">' + mark("Undergraduate", 0, 0, 5, true) + "</svg>No sections on record</span>" +
+      '<span><svg width="26" height="14" aria-hidden="true"><rect width="26" height="14" class="bandrect"/><line x1="0" x2="26" y1="7" y2="7" class="diag"/></svg>In line (within ' + (S.load_gap * 100).toFixed(2).replace(/0$/, "") + " pts)</span>";
+
+    // Gaps in the join
+    const items = [];
+    if (E.recon.length) items.push({ warn: true, title: "Headcounts do not reconcile", tags: [E.recon.length + " segment-years"], why: E.recon.slice(0, 4).map((x) => x.seg + " " + x.year + ": programs add to " + int(x.programs) + ", the aid summary says " + int(x.segment)).join("; ") + ". Net tuition by program will not add up to the segment until these match." });
+    if (none.length) items.push({ warn: true, title: "Programs with no sections on record", tags: [none.length + " programs", big(none.reduce((t, r) => t + r.netNow, 0)) + " net tuition"], why: none.sort((a, b) => b.netNow - a.netNow).map((r) => r.name).join(", ") + ". Online, eight-week, practicum, and dissertation sections often live outside the fall export. Ask the registrar which schedule they are in." });
+    E.unmapped.forEach((seats, pre) => items.push({ warn: true, title: "Subject " + pre + " is not in the subject map", tags: [int(seats) + " seats"], why: "These sections count toward the total but join to no program. Add " + pre + " to subjects in the source." }));
+    Object.entries(M.subjects).forEach(([pre, v]) => { if (v.note) items.push({ title: pre + " → " + (v.program || "shared, not attributed"), tags: E.shared.get(pre) ? [int(E.shared.get(pre)) + " seats"] : [], why: v.note }); });
+    $("gaps").innerHTML = items.length ? items.map((f) => '<div class="finding' + (f.warn ? " warn" : "") + '"><span class="stripe" aria-hidden="true"></span><div class="body"><div class="top"><strong>' + esc(f.title) + "</strong>" + f.tags.map((t) => '<span class="pill ' + (f.warn ? "warn" : "tag") + '">' + esc(t) + "</span>").join(" ") + '</div><p class="why">' + esc(f.why) + "</p></div></div>").join("")
+      : '<p class="empty">Every subject maps to a program, every program has sections, and headcounts reconcile.</p>';
+
+    renderLoadTable(E);
+    const order = { "Over cap": 0, "Under-enrolled": 1, "Near cap": 2 };
+    $("section-table").innerHTML = flagged.length ? "<caption class='sr'>Sections flagged under-enrolled, over cap, or near cap</caption><thead><tr><th scope='col'>Section</th><th scope='col'>Course</th><th scope='col'>Program</th><th scope='col'>Instructor</th><th scope='col' class='num'>Enrolled / cap</th><th scope='col' class='num'>Fill</th><th scope='col'>Flag</th></tr></thead><tbody>" +
+      flagged.sort((a, b) => order[a.flag] - order[b.flag] || b.fill - a.fill).map((x) => "<tr><td>" + esc(x.id) + "</td><td>" + esc(x.course) + "</td><td>" + esc(x.program || "Shared") + "</td><td>" + esc(x.instructor) + '</td><td class="num">' + int(x.enrolled) + " / " + int(x.cap) + '</td><td class="num">' + pct(x.fill, 0) + '</td><td><span class="pill ' + (x.flag === "Over cap" ? "crit" : "warn") + '">' + esc(x.flag) + "</span></td></tr>").join("") + "</tbody>"
+      : "<tbody><tr><td>No sections are under-enrolled, over cap, or near cap at these settings.</td></tr></tbody>";
+  }
+
+  function loadSVG(E) {
+    const W = 940, H = 520, L = 64, R = 24, T = 20, B = 52;
+    const mx = Math.max(0.02, ...E.rows.map((r) => Math.max(r.seatShare, r.ntShare))) * 1.08;
+    const hi = Math.ceil(mx * 100) / 100, X = (v) => L + (v / hi) * (W - L - R), Y = (v) => T + (1 - v / hi) * (H - T - B);
+    let g = "";
+    for (let v = 0; v <= hi + 1e-9; v += 0.01) {
+      g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/><text class="tick" x="' + (L - 8) + '" y="' + (Y(v) + 4).toFixed(1) + '" text-anchor="end">' + pct(v, 0) + "</text>";
+      g += '<text class="tick" x="' + X(v).toFixed(1) + '" y="' + (H - B + 18) + '" text-anchor="middle">' + pct(v, 0) + "</text>";
+    }
+    const k = S.load_gap;
+    g += '<path class="bandrect" d="M' + X(0) + "," + Y(k) + " L" + X(hi - k) + "," + Y(hi) + " L" + X(hi) + "," + Y(hi) + " L" + X(hi) + "," + Y(hi - k) + " L" + X(k) + "," + Y(0) + " L" + X(0) + "," + Y(0) + 'Z"/>';
+    g += '<line class="diag" x1="' + X(0) + '" y1="' + Y(0) + '" x2="' + X(hi) + '" y2="' + Y(hi) + '"/>';
+    g += '<text class="reflabel" x="' + (X(hi) - 6) + '" y="' + (Y(0) - 8) + '" text-anchor="end">Teaches more than it earns →</text>';
+    g += '<text class="reflabel" x="' + (X(0) + 8) + '" y="' + (Y(hi) + 14) + '">↑ Earns more than it teaches</text>';
+    g += '<text class="axistitle" x="' + (L + (W - L - R) / 2) + '" y="' + (H - 10) + '" text-anchor="middle">Share of enrolled seats, ' + esc(M.meta.term || "") + " sections</text>";
+    g += '<text class="axistitle" transform="translate(16 ' + (T + (H - T - B) / 2) + ') rotate(-90)" text-anchor="middle">Share of net tuition</text>';
+    E.rows.forEach((r) => {
+      const x = X(r.seatShare).toFixed(1), y = Y(r.ntShare).toFixed(1);
+      g += "<g>" + mark(r.level, +x, +y, 5.5, !r.sections) + "<title>" + esc(r.name + ": " + pct(r.seatShare, 1) + " of seats, " + pct(r.ntShare, 1) + " of net tuition" + (r.sections ? "" : ", no sections on record")) + "</title></g>";
+    });
+    // Label the programs furthest from the diagonal, skipping collisions.
+    const boxes = E.rows.map((r) => ({ x0: X(r.seatShare) - 7, x1: X(r.seatShare) + 7, y0: Y(r.ntShare) - 7, y1: Y(r.ntShare) + 7 }));
+    const hit = (b) => boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0) || b.x1 > W - R || b.x0 < L - 2 || b.y0 < T || b.y1 > H - B;
+    E.rows.slice().sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).slice(0, 14).forEach((r) => {
+      const w = r.name.length * 6.3 + 4, px = X(r.seatShare), py = Y(r.ntShare);
+      for (const [dx, dy, an] of [[10, 4, "start"], [-10, 4, "end"], [0, -11, "middle"], [0, 19, "middle"], [10, -8, "start"], [10, 16, "start"]]) {
+        const lx = px + dx, x0 = an === "start" ? lx : an === "end" ? lx - w : lx - w / 2, b = { x0, x1: x0 + w, y0: py + dy - 11, y1: py + dy + 3 };
+        if (!hit(b)) { boxes.push(b); g += '<text class="plabel" x="' + lx.toFixed(1) + '" y="' + (py + dy).toFixed(1) + '" text-anchor="' + an + '" aria-hidden="true">' + esc(r.name) + "</text>"; break; }
+      }
+    });
+    const cnt = (x) => E.rows.filter((r) => r.read === x).length;
+    const label = "Scatter plot of " + E.rows.length + " programs by share of enrolled seats and share of net tuition. " + cnt("Seat share higher") + " teach a larger share of seats than their revenue share, " + cnt("Revenue share higher") + " bring in a larger share of revenue than of seats, " + cnt("In line") + " are in line, and " + cnt("No sections") + " have no sections on record. The table below lists every program.";
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+
+  const LOAD_COLS = [
+    { k: "name", label: "Program", get: (r) => r.name.toLowerCase() },
+    { k: "sections", label: "Sections", num: true, get: (r) => r.sections },
+    { k: "seats", label: "Seats / cap", num: true, get: (r) => r.seats },
+    { k: "perMajor", label: "Seats per major", num: true, get: (r) => r.perMajor ?? -1 },
+    { k: "seatShare", label: "Seat share", num: true, get: (r) => r.seatShare },
+    { k: "ntShare", label: "Revenue share", num: true, get: (r) => r.ntShare },
+    { k: "gap", label: "Gap", num: true, get: (r) => (r.sections ? r.gap : -9) },
+    { k: "read", label: "Read", get: (r) => ["No sections", "Revenue share higher", "In line", "Seat share higher"].indexOf(r.read) },
+  ];
+  const readPill = (r) => '<span class="pill ' + ({ "No sections": "warn", "Seat share higher": "tag", "Revenue share higher": "tag", "In line": "muted" }[r.read]) + '">' + esc(r.read) + "</span>";
+  function renderLoadTable(E) {
+    const rows = E.rows.slice().sort(sorter(LOAD_COLS, loadSort, loadDir));
+    const col = LOAD_COLS.find((c) => c.k === loadSort);
+    let h = "<caption class='sr'>Teaching load by program, sorted by " + esc(col.label) + (loadDir < 0 ? ", highest first" : ", lowest first") + ".</caption>" + sortHead(LOAD_COLS, loadSort, loadDir, "load") + "<tbody>";
+    rows.forEach((r) => {
+      h += "<tr>" + progCell(r) + '<td class="num">' + r.sections + (r.under ? '<span class="sub">' + r.under + " under-enrolled</span>" : "") + (r.over ? '<span class="sub">' + r.over + " over cap</span>" : "") + "</td>" +
+        '<td class="num">' + (r.sections ? int(r.seats) + " / " + int(r.cap) + '<span class="sub">' + pct(r.cap ? r.seats / r.cap : null, 0) + " full</span>" : "—") + "</td>" +
+        '<td class="num">' + (r.sections ? r.perMajor.toFixed(2) : "—") + '</td><td class="num">' + pct(r.seatShare, 1) + '</td><td class="num">' + pct(r.ntShare, 1) + "</td>" +
+        '<td class="num">' + (r.sections ? (r.gap > 0 ? "+" : r.gap < 0 ? MINUS : "") + Math.abs(r.gap * 100).toFixed(1) + " pts" : "—") + "</td><td>" + readPill(r) + "</td></tr>";
+    });
+    $("load-table").innerHTML = h + "</tbody>";
+  }
+
+  // ---- Meta, tabs, source ---------------------------------------------
+  function renderMeta(E) {
+    $("meta").innerHTML = [["As of", M.meta.as_of], ["Programs", M.programs.length], ["Students, " + M.years[E.last], int(E.totHC)], ["Sections", M.sections.length + " (" + (M.meta.term || "") + ")"], ["Reconciles", E.recon.length ? "No, see Teaching load" : "Yes"], ["Steward", M.meta.steward], ["Source", "rcu-economics.yaml"]]
+      .filter(([, v]) => v != null && v !== "").map(([k, v]) => "<span>" + esc(k) + " <b>" + esc(v) + "</b></span>").join("");
+  }
+  function renderAll() { syncControls(); const E = evaluate(M, S); renderMeta(E); renderRevenue(E); renderTeaching(E); }
+
+  const TABS = ["revenue", "teaching", "source"];
+  function show(view, focus) {
+    if (!TABS.includes(view)) view = "revenue";
+    TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  }
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { history.replaceState(null, "", "#" + b.dataset.view); show(b.dataset.view); } });
+  document.querySelector(".tabs").addEventListener("keydown", (e) => {
+    const i = TABS.indexOf(document.activeElement.dataset.view); if (i < 0) return;
+    const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+    if (j >= 0) { e.preventDefault(); history.replaceState(null, "", "#" + TABS[j]); show(TABS[j], true); }
+  });
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+
+  $("sliders").addEventListener("input", (e) => {
+    const k = e.target.dataset.k; if (!k) return;
+    const d = sliderDefs().find((x) => x.k === k), v = parseFloat(e.target.value);
+    if (d.set) d.set(v); else S[k] = v;
+    renderAll();
+  });
+  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; S = cloneS(presetState(PRESETS().find((p) => p.id === b.dataset.preset))); renderAll(); });
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort][data-table]"); if (!b) return;
+    const t = b.dataset.table, k = b.dataset.sort;
+    if (t === "rev") { if (revSort === k) revDir = -revDir; else { revSort = k; revDir = k === "name" ? 1 : -1; } }
+    else { if (loadSort === k) loadDir = -loadDir; else { loadSort = k; loadDir = k === "name" ? 1 : -1; } }
+    renderAll(); const nb = document.querySelector('[data-table="' + t + '"][data-sort="' + k + '"]'); if (nb) nb.focus();
+  });
+
+  const status = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
+  $("apply").addEventListener("click", () => {
+    try { const next = build($("yaml-src").value); M = next; S = cloneS(M.defaults); renderSliders(); renderAll(); status("Applied. " + M.programs.length + " programs, " + M.sections.length + " sections. Every view now reflects your edits, and the rules reset to the file's settings.", "ok"); }
+    catch (err) { status("Not applied. " + err.message, "err"); }
+  });
+  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; M = build(ORIGINAL); S = cloneS(M.defaults); renderSliders(); renderAll(); status("Reset to the original source.", "ok"); });
+  $("copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("yaml-src").value); status("Copied to the clipboard.", "ok"); }
+    catch { $("yaml-src").select(); status("Select all and copy with your keyboard; this browser blocked clipboard access.", ""); }
+  });
+
+  // ---- Boot ------------------------------------------------------------
+  $("yaml-src").value = ORIGINAL;
+  try { M = build(ORIGINAL); S = cloneS(M.defaults); renderSliders(); renderAll(); }
+  catch (err) { $("rev-narrative").textContent = err.message; }
+  show(location.hash.slice(1) || "revenue");
+})();
+</script>
+</body>
+</html>
