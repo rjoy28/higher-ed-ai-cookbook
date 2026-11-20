@@ -112,9 +112,9 @@ th[aria-sort="ascending"] button::after { content: "↑"; opacity: 1; }
 th[aria-sort="descending"] button::after { content: "↓"; opacity: 1; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: 0; }
-td .sub { color: var(--muted); font-size: 0.86rem; display: block; }
-td .note { color: var(--muted); font-size: 0.84rem; display: block; font-style: italic; max-width: 46ch; }
-tr.changed td:first-child { box-shadow: inset 4px 0 0 var(--accent); }
+td .sub, th .sub { color: var(--muted); font-size: 0.86rem; font-weight: 400; display: block; }
+td .note, th .note { color: var(--ink); font-size: 0.84rem; font-weight: 400; display: block; font-style: italic; max-width: 46ch; margin-top: 0.35rem; line-height: 1.4; }
+tr.changed > :first-child { box-shadow: inset 4px 0 0 var(--accent); }
 .spark { display: block; }
 .spark path { fill: none; stroke: var(--ink); stroke-width: 1.6; }
 .spark circle { fill: var(--ink); }
