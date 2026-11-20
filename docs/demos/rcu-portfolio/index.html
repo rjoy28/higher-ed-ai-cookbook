@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RCU Portfolio Explorer</title>
+<meta name="description" content="A fictional university's program enrollment in one source file, rendered as a portfolio scorecard and school rollup. Move the recipe's thresholds and watch programs reclassify. A Higher Ed AI Cookbook fixture.">
+<meta property="og:title" content="RCU Portfolio Explorer">
+<meta property="og:description" content="One source file. Move the thresholds and watch the program labels change.">
+<meta property="og:image" content="https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-portfolio/preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Same visual system as the RCU Systems Atlas, so the demos read as one set. */
+:root {
+  --bg: #f4f7f8; --surface: #ffffff; --ink: #14212b; --muted: #475763; --line: #d2dbe0; --accent: #0d6670;
+  --grad: #1f5fa8; --ug: #8a4b0f;
+  --crit: #b42318; --warn: #8f5400; --ok: #1d7a3a; --band: rgba(13,102,112,.09);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e1418; --surface: #162027; --ink: #e5edf1; --muted: #a2b1ba; --line: #2b3a44; --accent: #5cc3cc;
+  --grad: #84b4ee; --ug: #e4a76a;
+  --crit: #ff8b7b; --warn: #f2b84b; --ok: #72d38f; --band: rgba(92,195,204,.12); color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 1rem; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); font-stretch: 85%; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.lede { color: var(--muted); max-width: 70ch; margin-top: 8px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 0.88rem; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 26px; border-bottom: 2px solid var(--line); }
+.tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 0.98rem var(--f-body); padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px; cursor: pointer; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+:is(.tab, button, input, textarea, a):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.panel { padding-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+
+/* Settings */
+.settings { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 14px; }
+.settings-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; }
+.slider { display: grid; gap: 2px; }
+.slider label { font-size: 0.86rem; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.slider output { font-family: var(--f-mono); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.slider output.changed { color: var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group > .lbl { font-size: 0.86rem; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.chipbtn { font: 600 0.88rem var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+.chipbtn:hover { border-color: var(--accent); }
+.chipbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn { font: 600 0.92rem var(--f-body); border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+
+.narrative { font-size: 1.12rem; max-width: 74ch; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stat { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.stat .n { font-family: var(--f-display); font-stretch: 85%; font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-size: 0.84rem; color: var(--muted); }
+.stat.compact .n { font-size: 1.45rem; letter-spacing: -0.01em; }
+.stat.ok .n { color: var(--ok); } .stat.warn .n { color: var(--warn); } .stat.crit .n { color: var(--crit); }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.svgbox { overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.axis text, .tick { font: 12px var(--f-mono); fill: var(--muted); }
+.axis line, .grid { stroke: var(--line); stroke-width: 1; }
+.axistitle { font: 600 12.5px var(--f-body); fill: var(--muted); }
+.bandrect { fill: var(--band); }
+.bandline { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.tierline { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
+.reflabel { font: 600 11.5px var(--f-mono); fill: var(--accent); }
+.tierlabel { font: 600 11.5px var(--f-mono); fill: var(--muted); }
+.zero { stroke: var(--muted); stroke-width: 1; opacity: .5; }
+.pt { stroke: var(--surface); stroke-width: 1.5; }
+.pt.Growing { fill: var(--ok); } .pt.Declining { fill: var(--crit); } .pt.Stable { fill: var(--muted); } .pt.New { fill: var(--warn); }
+.ring { fill: none; stroke: var(--accent); stroke-width: 2.2; }
+.plabel { font: 600 11.5px var(--f-body); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.bar-ug { fill: var(--ug); } .bar-grad { fill: var(--grad); }
+.barlabel { font: 600 12px var(--f-mono); fill: var(--ink); }
+.rowlabel { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { flex: none; }
+
+.section-head { display: grid; gap: 4px; }
+.section-head p { color: var(--muted); max-width: 74ch; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg); white-space: nowrap; }
+th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+th[aria-sort] button::after { content: "↕"; opacity: .45; }
+th[aria-sort="ascending"] button::after { content: "↑"; opacity: 1; }
+th[aria-sort="descending"] button::after { content: "↓"; opacity: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+td .sub { color: var(--muted); font-size: 0.86rem; display: block; }
+td .note { color: var(--muted); font-size: 0.84rem; display: block; font-style: italic; max-width: 46ch; }
+tr.changed td:first-child { box-shadow: inset 4px 0 0 var(--accent); }
+.spark { display: block; }
+.spark path { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.spark circle { fill: var(--ink); }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1.5px solid currentColor; white-space: nowrap; }
+.pill.Growing, .pill.ok { color: var(--ok); } .pill.Declining, .pill.crit { color: var(--crit); } .pill.Stable { color: var(--muted); } .pill.New, .pill.warn { color: var(--warn); }
+.pill.tag { color: var(--accent); }
+.was { color: var(--muted); font-size: 0.84rem; display: block; margin-top: 3px; }
+
+.findings { display: grid; gap: 8px; }
+.finding { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.finding .stripe { background: var(--accent); }
+.finding .body { padding: 10px 14px; display: grid; gap: 4px; }
+.finding .top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.finding .why { color: var(--muted); font-size: 0.92rem; }
+.empty { color: var(--muted); padding: 12px 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 80ch; }
+.callout p + p { margin-top: 6px; }
+
+textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; tab-size: 2; resize: vertical; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.status { font-size: 0.92rem; color: var(--muted); min-height: 1.5em; }
+.status.err { color: var(--crit); font-weight: 600; white-space: pre-wrap; }
+.status.ok { color: var(--ok); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px; align-items: start; }
+.schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
+.schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+.schema dd { margin: 0 0 6px; color: var(--muted); }
+footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
+@media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Test Kitchen · Higher Ed AI Cookbook</p>
+    <h1>RCU Portfolio Explorer</h1>
+    <p class="lede">Five years of program enrollment at Riverside Christian University, in one source file. The <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/01_AcademicPortfolioAnalyst">Academic Portfolio Analyst</a> recipe labels each program Growing, Stable, or Declining and sorts it into a tier. Those labels come from thresholds someone chose. Move the thresholds and watch the labels change.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-scorecard" aria-controls="scorecard" data-view="scorecard">Scorecard</button>
+    <button class="tab" role="tab" id="tab-schools" aria-controls="schools" data-view="schools">Schools</button>
+    <button class="tab" role="tab" id="tab-source" aria-controls="source" data-view="source">Source</button>
+  </div>
+
+  <section class="panel" role="tabpanel" id="scorecard" aria-labelledby="tab-scorecard">
+    <div class="settings" role="group" aria-labelledby="settings-title">
+      <div class="settings-head">
+        <h2 id="settings-title" style="font-size:1.15rem">Thresholds</h2>
+        <div class="group" role="group" aria-labelledby="preset-label"><span class="lbl" id="preset-label">Try</span><span id="presets" class="group"></span></div>
+      </div>
+      <div class="sliders" id="sliders"></div>
+      <div class="group" role="group" aria-labelledby="level-label"><span class="lbl" id="level-label">Show</span><span id="levels" class="group"></span></div>
+    </div>
+
+    <p class="narrative" id="narrative" aria-live="polite"></p>
+    <div class="stats" id="stats"></div>
+
+    <div class="figure">
+      <div class="svgbox" id="scatter"></div>
+      <div class="legend" id="scatter-legend"></div>
+    </div>
+
+    <div class="section-head">
+      <h2>Changed from the recipe defaults</h2>
+      <p>Programs whose label or tier differs from what the source file's settings produce. Nothing about the programs changed. Only the lines moved.</p>
+    </div>
+    <div class="findings" id="changes"></div>
+
+    <div class="section-head">
+      <h2>Every program</h2>
+      <p>Select a column heading to sort. Growth rate is the compound annual rate from the first to the last census year. Programs under the small-base line show net change as the better read, because a few students move the rate a lot.</p>
+    </div>
+    <div class="tablebox"><table id="programs"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="schools" aria-labelledby="tab-schools" hidden>
+    <div class="section-head">
+      <h2>Where the growth came from</h2>
+      <p>Program labels can hide a pattern that only shows up in the rollup. This view adds programs up by school and level, using the same thresholds as the Scorecard.</p>
+    </div>
+    <p class="narrative" id="signal" aria-live="polite"></p>
+    <div class="stats" id="school-stats"></div>
+    <div class="figure">
+      <div class="svgbox" id="bars"></div>
+      <div class="legend" id="bars-legend"></div>
+    </div>
+    <div class="tablebox"><table id="school-table"></table></div>
+
+    <div class="section-head">
+      <h2>Quiet decline</h2>
+      <p>Programs losing students but still inside the Stable band. The recipe calls this a watch, not a reaction.</p>
+    </div>
+    <div class="tablebox"><table id="soft-table"></table></div>
+
+    <div class="section-head">
+      <h2>Largest shares of enrollment</h2>
+      <p>A single program at or above the concentration line is a dependency risk. Between the watch line and the concentration line is a watch.</p>
+    </div>
+    <div class="tablebox"><table id="conc-table"></table></div>
+
+    <div class="callout">
+      <p><strong>What this page does not do.</strong> It applies the recipe's rules and shows where they land. It does not recommend Grow, Maintain, Restructure, or Sunset. In the recipe, an AI assistant drafts those, each tagged by evidence basis, and faculty governance and cabinet decide.</p>
+      <p>Enrollment size is not profitability. The next demo in this series joins net tuition and section data to the same programs.</p>
+    </div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="source" aria-labelledby="tab-source" hidden>
+    <div class="section-head">
+      <h2>The source</h2>
+      <p>This YAML is the whole demo. Change a headcount, add a program, or edit the settings, then select Apply to re-render every view. Edits stay in this browser tab until you copy them out.</p>
+    </div>
+    <div class="controls">
+      <button class="btn" id="apply" type="button">Apply changes</button>
+      <button class="btn ghost" id="reset" type="button">Reset to original</button>
+      <button class="btn ghost" id="copy" type="button">Copy YAML</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <div class="two">
+      <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-portfolio.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
+      <dl class="schema">
+        <dt>meta.years</dt><dd>Census years, oldest first. Every program's headcount list follows this order.</dd>
+        <dt>settings</dt><dd>The recipe's thresholds, from the Input Template's Config tab. The sliders start here, and Recipe defaults returns to these values.</dd>
+        <dt>programs</dt><dd>One entry per program: name, level, school, online share in the latest year, headcount by year, and an optional note. Use null for a year the program did not exist.</dd>
+        <dt>Shape</dt><dd>The same data as the Input Template's long shape (one row per program per year), folded so it is easier to read and edit.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <footer>
+    <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. It matches the sample output in the Academic Portfolio Analyst recipe.</p>
+    <p><a href="../">All demos</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-portfolio-explorer">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+  </footer>
+</div>
+
+<script type="text/yaml" id="source-yaml">
+# RCU Portfolio Explorer: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the demo. Every chart, table, and
+# finding on the page is computed from it. Change the file, and the views change.
+#
+# Shape: this is the Academic Portfolio Analyst Input Template (one row per program
+# per year), folded so each program carries its five census headcounts in order.
+#
+# Schema
+#   meta       institution, census years in order, census date, steward
+#   settings   the recipe's configurable thresholds (the Input Template's Config tab)
+#   programs   name, level, school, online share in the latest year, headcount by
+#              year (same order as meta.years), and an optional note
+#
+# Rules the page applies (same as the recipe's Sources & Methodology tab)
+#   growth rate  CAGR = (latest / earliest) ^ (1 / (years - 1)) - 1
+#   trend        Growing above +trend_band, Declining below -trend_band, else Stable
+#   tier         Tier 1 >= tier_1, Tier 2 >= tier_2, Tier 3 >= tier_3, else Tier 4
+#   share        latest headcount / total latest headcount
+#   concentration  share >= concentration_flag; watch >= concentration_watch
+#   small base   latest headcount below small_base: read net change, not the rate
+#   severity     High when CAGR < -5% and headcount < tier_2
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-20"
+  years: [Fall 2022, Fall 2023, Fall 2024, Fall 2025, Fall 2026]
+  census: Fourth Friday of the fall term
+  steward: Institutional Research
+  fixture: true
+
+settings:
+  tier_1: 50
+  tier_2: 20
+  tier_3: 8
+  trend_band: 0.03
+  concentration_flag: 0.15
+  concentration_watch: 0.10
+  small_base: 30
+
+programs:
+
+  # Arts & Sciences
+  - {name: "English", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [62, 61, 60, 59, 58],
+     note: "Also carries most first-year composition sections, so major headcount understates its load."}
+  - {name: "History", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [45, 44, 43, 43, 42]}
+  - {name: "Communication", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [66, 67, 68, 70, 71]}
+  - {name: "Philosophy", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [24, 24, 24, 24, 24]}
+  - {name: "Music", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Biology", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [96, 96, 96, 96, 96]}
+  - {name: "Chemistry", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [34, 34, 34, 34, 34]}
+  - {name: "Mathematics", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 29, 29, 29]}
+  - {name: "Environmental Science", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 30, 30, 31]}
+  - {name: "Exercise Science", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [78, 79, 81, 82, 84]}
+  - {name: "Psychology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [109, 111, 114, 116, 118]}
+  - {name: "Sociology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [39, 39, 39, 39, 39]}
+  - {name: "Criminal Justice", level: Undergraduate, school: "Arts & Sciences", online: 0.26, headcount: [52, 52, 52, 52, 52]}
+  - {name: "Political Science", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [23, 23, 23, 22, 22]}
+  - {name: "MA Christian Thought", level: Graduate, school: "Arts & Sciences", online: 0.36, headcount: [19, 20, 21, 21, 22]}
+
+  # Business & Leadership
+  - {name: "Business Administration", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [128, 128, 128, 128, 128],
+     note: "Largest program. Its catalog page was last edited in Publisher by a registrar who retired in 2021."}
+  - {name: "Management & Leadership", level: Undergraduate, school: "Business & Leadership", online: 0.43, headcount: [56, 58, 59, 60, 61]}
+  - {name: "Sport Management", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [68, 70, 71, 73, 74],
+     note: "Launched Fall 2022 with a transfer cohort; athletics still calls it “the new major.”"}
+  - {name: "Accounting", level: Undergraduate, school: "Business & Leadership", online: 0.16, headcount: [32, 32, 32, 32, 32]}
+  - {name: "Marketing", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Finance", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [26, 26, 26, 26, 26]}
+  - {name: "Healthcare Administration", level: Undergraduate, school: "Business & Leadership", online: 0.46, headcount: [17, 17, 17, 18, 18],
+     note: "Two adjunct-taught sections. The clinical-partner agreement lives in a binder in the dean’s office."}
+  - {name: "MBA", level: Graduate, school: "Business & Leadership", online: 0.56, headcount: [83, 86, 89, 92, 95],
+     note: "Online cohorts start in August and January; census counts only the August start."}
+  - {name: "MS Organizational Leadership", level: Graduate, school: "Business & Leadership", online: 0.59, headcount: [42, 43, 45, 46, 48]}
+
+  # Education
+  - {name: "Elementary Education", level: Undergraduate, school: "Education", online: 0.03, headcount: [78, 78, 78, 78, 78]}
+  - {name: "Middle Grades Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [25, 25, 25, 24, 24]}
+  - {name: "Secondary Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [41, 41, 41, 41, 41]}
+  - {name: "Special Education", level: Undergraduate, school: "Education", online: 0.13, headcount: [35, 36, 37, 37, 38]}
+  - {name: "Physical Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [26, 26, 26, 26, 26]}
+  - {name: "MAT", level: Graduate, school: "Education", online: 0.3, headcount: [35, 36, 37, 39, 40]}
+  - {name: "MEd", level: Graduate, school: "Education", online: 0.49, headcount: [48, 50, 51, 53, 55]}
+  - {name: "EdD", level: Graduate, school: "Education", online: 0.59, headcount: [33, 34, 35, 37, 38]}
+
+  # Ministry & Theology
+  - {name: "Biblical Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [44, 44, 44, 44, 44]}
+  - {name: "Christian Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [58, 58, 58, 58, 58]}
+  - {name: "Missions & Intercultural Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [29, 28, 28, 27, 27],
+     note: "Mission-central. Two of the last five study-abroad partners have closed."}
+  - {name: "Youth Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [49, 49, 49, 49, 49]}
+  - {name: "Worship Leadership", level: Undergraduate, school: "Ministry & Theology", online: 0.07, headcount: [40, 41, 41, 42, 43]}
+  - {name: "Pastoral Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [36, 36, 36, 36, 36]}
+  - {name: "Christian Education", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [22, 22, 22, 21, 21]}
+  - {name: "Theology", level: Undergraduate, school: "Ministry & Theology", online: 0.1, headcount: [30, 30, 30, 30, 30]}
+  - {name: "MDiv", level: Graduate, school: "Ministry & Theology", online: 0.3, headcount: [37, 38, 39, 41, 42]}
+  - {name: "MA Biblical Studies", level: Graduate, school: "Ministry & Theology", online: 0.39, headcount: [17, 18, 19, 19, 20]}
+  - {name: "MA Christian Counseling", level: Graduate, school: "Ministry & Theology", online: 0.36, headcount: [29, 30, 31, 32, 33]}
+  - {name: "MA Worship Leadership", level: Graduate, school: "Ministry & Theology", online: 0.33, headcount: [21, 22, 22, 23, 24]}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" integrity="sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const MINUS = "−";
+  const pct = (x, d = 1, sign = false) => x == null || !isFinite(x) ? "n/a" : (x < 0 ? MINUS : sign && x > 0 ? "+" : "") + Math.abs(x * 100).toFixed(d) + "%";
+  const signed = (n) => (n < 0 ? MINUS : n > 0 ? "+" : "") + Math.abs(n).toLocaleString();
+  const int = (n) => Number(n).toLocaleString();
+  const ORIGINAL = $("source-yaml").textContent.replace(/^\n/, "");
+
+  // ---- Model -----------------------------------------------------------
+  const KEYS = ["tier_1", "tier_2", "tier_3", "trend_band", "concentration_flag", "concentration_watch", "small_base"];
+  function build(text) {
+    if (typeof jsyaml === "undefined") throw new Error("The YAML parser did not load. Check your connection and reload the page.");
+    const d = jsyaml.load(text);
+    if (!d || typeof d !== "object") throw new Error("The source is empty.");
+    const meta = d.meta || {};
+    const years = meta.years;
+    if (!Array.isArray(years) || years.length < 2) throw new Error("meta.years needs at least two census years.");
+    const settings = Object.assign({}, d.settings || {});
+    KEYS.forEach((k) => { if (typeof settings[k] !== "number" || !isFinite(settings[k])) throw new Error("settings." + k + " must be a number."); });
+    if (!Array.isArray(d.programs) || !d.programs.length) throw new Error("programs needs at least one entry.");
+    const seen = new Set();
+    const programs = d.programs.map((p, i) => {
+      const where = "programs[" + i + "]" + (p && p.name ? " (" + p.name + ")" : "");
+      if (!p || !p.name) throw new Error(where + " needs a name.");
+      if (!p.level || !p.school) throw new Error(where + " needs a level and a school.");
+      const key = p.name + "|" + p.level;
+      if (seen.has(key)) throw new Error(where + " appears twice.");
+      seen.add(key);
+      if (!Array.isArray(p.headcount) || p.headcount.length !== years.length) throw new Error(where + ": headcount needs " + years.length + " values, one per year in meta.years.");
+      p.headcount.forEach((h) => { if (h !== null && (typeof h !== "number" || h < 0)) throw new Error(where + ": headcount values must be numbers of zero or more, or null."); });
+      return { name: String(p.name), level: String(p.level), school: String(p.school), online: typeof p.online === "number" ? p.online : null, hc: p.headcount, note: p.note ? String(p.note) : "" };
+    });
+    return { meta, years, defaults: settings, programs };
+  }
+
+  function evaluate(M, S) {
+    const last = M.years.length - 1;
+    const total = M.programs.reduce((s, p) => s + (p.hc[last] || 0), 0);
+    const rows = M.programs.map((p) => {
+      const i0 = p.hc.findIndex((h) => h != null && h > 0);
+      const now = p.hc[last] || 0;
+      let cagr = null, status, net = null;
+      if (i0 < 0 || i0 === last || now === 0) status = now === 0 ? "Closed" : "New";
+      else {
+        cagr = Math.pow(now / p.hc[i0], 1 / (last - i0)) - 1;
+        net = now - p.hc[i0];
+        status = cagr > S.trend_band + 1e-12 ? "Growing" : cagr < -S.trend_band - 1e-12 ? "Declining" : "Stable";
+      }
+      if (status === "Closed") status = "Declining";
+      const tier = now >= S.tier_1 ? 1 : now >= S.tier_2 ? 2 : now >= S.tier_3 ? 3 : 4;
+      const share = total ? now / total : 0;
+      const conc = share >= S.concentration_flag ? "Concentration" : share >= S.concentration_watch ? "Watch" : "";
+      const small = now < S.small_base;
+      const severity = cagr != null && cagr < -0.05 && now < S.tier_2 ? "High" : status === "Declining" ? "Medium" : cagr != null && cagr < 0 ? "Low" : "";
+      return Object.assign({}, p, { now, start: i0 >= 0 ? p.hc[i0] : null, cagr, net, status, tier, share, conc, small, severity, key: p.name + "|" + p.level });
+    });
+    return { rows, total, byKey: new Map(rows.map((r) => [r.key, r])) };
+  }
+
+  // ---- State -----------------------------------------------------------
+  let M, S, level = "all", sortKey = "now", sortDir = -1;
+  const SLIDERS = [
+    { k: "trend_band", label: "Trend band (±)", min: 0.005, max: 0.06, step: 0.0025, fmt: (v) => "±" + (v * 100).toFixed(2).replace(/0$/, "") + "%" },
+    { k: "tier_1", label: "Tier 1 at or above", min: 10, max: 150, step: 5, fmt: int },
+    { k: "tier_2", label: "Tier 2 at or above", min: 5, max: 100, step: 5, fmt: int },
+    { k: "tier_3", label: "Tier 3 at or above", min: 1, max: 40, step: 1, fmt: int },
+    { k: "concentration_flag", label: "Concentration line", min: 0.02, max: 0.3, step: 0.005, fmt: (v) => pct(v, 1) },
+    { k: "concentration_watch", label: "Watch line", min: 0.01, max: 0.25, step: 0.005, fmt: (v) => pct(v, 1) },
+    { k: "small_base", label: "Small-base line", min: 5, max: 60, step: 1, fmt: int },
+  ];
+  const PRESETS = [
+    { id: "defaults", label: "Recipe defaults", set: {} },
+    { id: "tight", label: "Tighter trend band (±1.5%)", set: { trend_band: 0.015 } },
+    { id: "midsize", label: "Mid-size college tiers", set: { tier_1: 100, tier_2: 40, tier_3: 15 } },
+    { id: "lowconc", label: "Low concentration line (5%)", set: { concentration_flag: 0.05, concentration_watch: 0.04 } },
+  ];
+  const sameSettings = (a, b) => KEYS.every((k) => Math.abs(a[k] - b[k]) < 1e-9);
+
+  function enforceOrder(changed) {
+    // Keep tier_1 > tier_2 > tier_3 and watch < flag, moving whichever slider the person did not touch.
+    if (S.tier_2 >= S.tier_1) { if (changed === "tier_1") S.tier_2 = Math.max(5, S.tier_1 - 5); else S.tier_1 = S.tier_2 + 5; }
+    if (S.tier_3 >= S.tier_2) { if (changed === "tier_3") S.tier_2 = S.tier_3 + 1; else S.tier_3 = Math.max(1, S.tier_2 - 1); }
+    if (S.tier_2 >= S.tier_1) S.tier_1 = S.tier_2 + 5;
+    if (S.concentration_watch >= S.concentration_flag) { if (changed === "concentration_watch") S.concentration_flag = S.concentration_watch + 0.005; else S.concentration_watch = Math.max(0.005, S.concentration_flag - 0.005); }
+  }
+
+  // ---- Rendering helpers ------------------------------------------------
+  const tierName = (t) => "Tier " + t;
+  const statusIcon = (s) => ({ Growing: "▲", Declining: "▼", Stable: "●", New: "◆" }[s] || "●");
+  const pill = (s) => '<span class="pill ' + esc(s) + '"><span aria-hidden="true">' + statusIcon(s) + "</span>" + esc(s) + "</span>";
+  const stat = (n, k, cls) => '<div class="stat ' + (cls || "") + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>";
+  const levelShort = (l) => (/^grad/i.test(l) ? "Graduate" : /^under/i.test(l) ? "Undergraduate" : l);
+  const filtered = (rows) => rows.filter((r) => level === "all" || levelShort(r.level) === level);
+
+  function shape(status, x, y, r) {
+    const cls = 'class="pt ' + esc(status) + '"';
+    if (status === "Growing") return "<path " + cls + ' d="M' + x + "," + (y - r * 1.25) + " L" + (x + r * 1.15) + "," + (y + r * 0.8) + " L" + (x - r * 1.15) + "," + (y + r * 0.8) + 'Z"/>';
+    if (status === "Declining") return "<path " + cls + ' d="M' + x + "," + (y + r * 1.25) + " L" + (x + r * 1.15) + "," + (y - r * 0.8) + " L" + (x - r * 1.15) + "," + (y - r * 0.8) + 'Z"/>';
+    if (status === "New") return "<path " + cls + ' d="M' + x + "," + (y - r * 1.2) + " L" + (x + r * 1.2) + "," + y + " L" + x + "," + (y + r * 1.2) + " L" + (x - r * 1.2) + "," + y + 'Z"/>';
+    return "<circle " + cls + ' cx="' + x + '" cy="' + y + '" r="' + r + '"/>';
+  }
+
+  function sparkline(hc) {
+    const w = 72, h = 22, vals = hc.map((v) => (v == null ? null : v));
+    const nums = vals.filter((v) => v != null);
+    if (nums.length < 2) return "";
+    const lo = Math.min(...nums), hi = Math.max(...nums), span = hi - lo || 1;
+    // Flat lines sit mid-height; others use the full height, so small moves stay visible but honest in the table numbers.
+    const y = (v) => (hi === lo ? h / 2 : 3 + (h - 6) * (1 - (v - lo) / span));
+    let d = "", lastPt = null;
+    vals.forEach((v, i) => { if (v == null) return; const x = 3 + (i * (w - 6)) / (vals.length - 1); d += (d ? " L" : "M") + x.toFixed(1) + "," + y(v).toFixed(1); lastPt = [x, y(v)]; });
+    return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true"><path d="' + d + '"/><circle cx="' + lastPt[0].toFixed(1) + '" cy="' + lastPt[1].toFixed(1) + '" r="2.4"/></svg>';
+  }
+
+  // ---- Scorecard -------------------------------------------------------
+  function renderSliders() {
+    $("sliders").innerHTML = SLIDERS.map((s) =>
+      '<div class="slider"><label for="s-' + s.k + '"><span>' + esc(s.label) + '</span><output id="o-' + s.k + '" for="s-' + s.k + '"></output></label>' +
+      '<input type="range" id="s-' + s.k + '" data-k="' + s.k + '" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '"></div>').join("");
+    $("presets").innerHTML = PRESETS.map((p) => '<button type="button" class="chipbtn" data-preset="' + p.id + '" aria-pressed="false">' + esc(p.label) + "</button>").join("");
+    $("levels").innerHTML = [["all", "All programs"], ["Undergraduate", "Undergraduate"], ["Graduate", "Graduate"]].map(([v, l]) => '<button type="button" class="chipbtn" data-level="' + v + '" aria-pressed="false">' + l + "</button>").join("");
+  }
+  function syncControls() {
+    SLIDERS.forEach((s) => {
+      const el = $("s-" + s.k), o = $("o-" + s.k);
+      el.value = S[s.k];
+      el.setAttribute("aria-valuetext", s.fmt(S[s.k]));
+      o.textContent = s.fmt(S[s.k]);
+      o.classList.toggle("changed", Math.abs(S[s.k] - M.defaults[s.k]) > 1e-9);
+    });
+    document.querySelectorAll("[data-preset]").forEach((b) => {
+      const p = PRESETS.find((x) => x.id === b.dataset.preset);
+      b.setAttribute("aria-pressed", String(sameSettings(S, Object.assign({}, M.defaults, p.set))));
+    });
+    document.querySelectorAll("[data-level]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.level === level)));
+  }
+
+  function diff(E, D) {
+    const out = [];
+    E.rows.forEach((r) => {
+      const d = D.byKey.get(r.key); if (!d) return;
+      const ch = [];
+      if (d.status !== r.status) ch.push({ kind: "status", from: d.status, to: r.status });
+      if (d.tier !== r.tier) ch.push({ kind: "tier", from: d.tier, to: r.tier });
+      if (d.conc !== r.conc) ch.push({ kind: "conc", from: d.conc || "No flag", to: r.conc || "No flag" });
+      if (ch.length) out.push({ r, ch });
+    });
+    return out;
+  }
+
+  function renderScorecard() {
+    const E = evaluate(M, S), D = evaluate(M, M.defaults), changes = diff(E, D);
+    const changedKeys = new Set(changes.map((c) => c.r.key));
+    const rows = filtered(E.rows);
+    const n = (st) => rows.filter((r) => r.status === st).length;
+    const scope = level === "all" ? "" : level.toLowerCase() + " ";
+    const largest = E.rows.slice().sort((a, b) => b.share - a.share)[0];
+    const flags = E.rows.filter((r) => r.conc === "Concentration");
+    const watch = E.rows.filter((r) => r.conc === "Watch");
+    let s = "At these thresholds, <strong>" + (n("Growing") || "No") + " " + scope + "programs are Growing, " + (n("Stable") || "none") + " Stable, and " + (n("Declining") || "none") + " Declining</strong>";
+    s += n("New") ? ", with " + n("New") + " too new to rate. " : ". ";
+    s += flags.length ? "<strong>" + flags.length + " program" + (flags.length > 1 ? "s cross" : " crosses") + " the " + pct(S.concentration_flag, 1) + " concentration line</strong>, led by " + esc(largest.name) + " at " + pct(largest.share, 1) + ". "
+      : "No program crosses the " + pct(S.concentration_flag, 1) + " concentration line; the largest, " + esc(largest.name) + ", is " + pct(largest.share, 1) + " of enrollment" + (watch.length ? ", and " + watch.length + " sit on watch. " : ". ");
+    s += sameSettings(S, M.defaults) ? "These are the recipe defaults. Move a slider to see what is a fact about the programs and what is a setting."
+      : "<strong>" + changes.length + " program" + (changes.length === 1 ? "" : "s") + " changed label or tier</strong> compared with the recipe defaults, with no change to the data.";
+    $("narrative").innerHTML = s;
+
+    const tiers = [1, 2, 3, 4].map((t) => rows.filter((r) => r.tier === t).length);
+    $("stats").innerHTML = stat(rows.length, scope ? "Programs shown" : "Programs") + stat(n("Growing"), "Growing", "ok") + stat(n("Stable"), "Stable") +
+      stat(n("Declining"), "Declining", n("Declining") ? "crit" : "") + stat(tiers[0] + "/" + tiers[1] + "/" + tiers[2] + "/" + tiers[3], "In Tier 1/2/3/4", "compact") +
+      stat(changes.length, "Changed from defaults", changes.length ? "warn" : "");
+
+    $("scatter").innerHTML = scatterSVG(rows, changedKeys);
+    $("scatter-legend").innerHTML =
+      ["Growing", "Stable", "Declining"].map((st) => '<span><svg width="16" height="16" viewBox="-8 -8 16 16" aria-hidden="true">' + shape(st, 0, 0, 5.5) + "</svg>" + st + "</span>").join("") +
+      '<span><svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true"><circle class="pt Stable" r="5"/><circle class="ring" r="8"/></svg>Changed from defaults</span>' +
+      '<span><svg width="26" height="14" aria-hidden="true"><rect width="26" height="14" class="bandrect"/><line x1="0" x2="26" y1="1" y2="1" class="bandline"/></svg>Stable band</span>' +
+      '<span><svg width="14" height="18" aria-hidden="true"><line x1="7" x2="7" y1="0" y2="18" class="tierline"/></svg>Tier line</span>';
+
+    renderChanges(changes);
+    renderTable(rows, D, changedKeys);
+  }
+
+  function scatterSVG(rows, changedKeys) {
+    const W = 940, H = 480, L = 64, R = 24, T = 44, B = 52;
+    const pw = W - L - R, ph = H - T - B;
+    const maxX = Math.max(S.tier_1 * 1.1, ...rows.map((r) => r.now), 10);
+    const xMax = Math.ceil((maxX * 1.06) / 20) * 20;
+    const rated = rows.filter((r) => r.cagr != null);
+    const yLo = Math.min(-S.trend_band * 1.6, ...rated.map((r) => r.cagr)) - 0.005;
+    const yHi = Math.max(S.trend_band * 1.6, ...rated.map((r) => r.cagr)) + 0.005;
+    const X = (v) => L + (v / xMax) * pw, Y = (v) => T + ((yHi - v) / (yHi - yLo)) * ph;
+    let g = "";
+    // Grid and axes
+    const yStep = yHi - yLo > 0.12 ? 0.02 : yHi - yLo > 0.05 ? 0.01 : 0.005;
+    for (let v = Math.ceil(yLo / yStep) * yStep; v <= yHi + 1e-9; v += yStep) {
+      g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/>';
+      g += '<text class="tick" x="' + (L - 8) + '" y="' + (Y(v) + 4).toFixed(1) + '" text-anchor="end">' + pct(v, yStep < 0.01 ? 1 : 0, true) + "</text>";
+    }
+    const xStep = xMax > 200 ? 50 : 20;
+    for (let v = 0; v <= xMax; v += xStep) g += '<text class="tick" x="' + X(v).toFixed(1) + '" y="' + (H - B + 18) + '" text-anchor="middle">' + v + "</text>";
+    g += '<line class="zero" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '"/>';
+    // Stable band
+    g += '<rect class="bandrect" x="' + L + '" y="' + Y(S.trend_band).toFixed(1) + '" width="' + pw + '" height="' + (Y(-S.trend_band) - Y(S.trend_band)).toFixed(1) + '"/>';
+    [S.trend_band, -S.trend_band].forEach((b) => (g += '<line class="bandline" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(b).toFixed(1) + '" y2="' + Y(b).toFixed(1) + '"/>'));
+    g += '<text class="reflabel" x="' + (W - R - 6) + '" y="' + (Y(S.trend_band) - 6).toFixed(1) + '" text-anchor="end">Growing above ' + pct(S.trend_band, 1, true) + "</text>";
+    g += '<text class="reflabel" x="' + (W - R - 6) + '" y="' + (Y(-S.trend_band) + 15).toFixed(1) + '" text-anchor="end">Declining below ' + pct(-S.trend_band, 1) + "</text>";
+    // Tier lines
+    let prevX = -1e9, lift = 0;
+    [["Tier 3", S.tier_3], ["Tier 2", S.tier_2], ["Tier 1", S.tier_1]].forEach(([n, v]) => {
+      if (v > xMax) return;
+      lift = X(v) - prevX < 92 && lift === 0 ? 14 : 0; prevX = X(v);
+      g += '<line class="tierline" x1="' + X(v).toFixed(1) + '" x2="' + X(v).toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '"/>';
+      g += '<text class="tierlabel" x="' + (X(v) + 4).toFixed(1) + '" y="' + (T - 10 - lift) + '">' + n + " ≥" + v + "</text>";
+    });
+    g += '<text class="axistitle" x="' + (L + pw / 2) + '" y="' + (H - 10) + '" text-anchor="middle">Headcount, ' + esc(M.years[M.years.length - 1]) + "</text>";
+    g += '<text class="axistitle" transform="translate(16 ' + (T + ph / 2) + ') rotate(-90)" text-anchor="middle">Growth rate per year</text>';
+    // Points: draw stable first so labelled points sit on top.
+    const order = rated.slice().sort((a, b) => (a.status === "Stable") - (b.status === "Stable") || 0).reverse();
+    order.forEach((r) => {
+      const x = X(r.now).toFixed(1), y = Y(r.cagr).toFixed(1);
+      const tip = r.name + " (" + levelShort(r.level) + "): " + int(r.now) + " students, " + pct(r.cagr, 1, true) + " a year, " + r.status + ", " + tierName(r.tier) + (changedKeys.has(r.key) ? ", changed from defaults" : "");
+      g += "<g>" + (changedKeys.has(r.key) ? '<circle class="ring" cx="' + x + '" cy="' + y + '" r="9.5"/>' : "") + shape(r.status, +x, +y, 5.5) + "<title>" + esc(tip) + "</title></g>";
+    });
+    // Labels: changed, declining, flagged, then the largest programs; skip any that would collide.
+    const pick = rated.slice().sort((a, b) => {
+      const pri = (r) => (changedKeys.has(r.key) ? 0 : r.status === "Declining" ? 1 : r.conc ? 2 : 3);
+      return pri(a) - pri(b) || b.now - a.now;
+    }).slice(0, 14);
+    const boxes = rated.map((r) => ({ x0: X(r.now) - 7, x1: X(r.now) + 7, y0: Y(r.cagr) - 7, y1: Y(r.cagr) + 7 }));
+    const hit = (b) => boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0) || b.x1 > W - R || b.x0 < L || b.y0 < T || b.y1 > H - B;
+    pick.forEach((r) => {
+      const w = r.name.length * 6.3 + 4, px = X(r.now), py = Y(r.cagr);
+      const tries = [[11, 4, "start"], [-11, 4, "end"], [0, -12, "middle"], [0, 20, "middle"], [11, -9, "start"], [11, 17, "start"], [-11, -9, "end"], [-11, 17, "end"]];
+      for (const [dx, dy, anchor] of tries) {
+        const lx = px + dx, x0 = anchor === "start" ? lx : anchor === "end" ? lx - w : lx - w / 2;
+        const b = { x0, x1: x0 + w, y0: py + dy - 11, y1: py + dy + 3 };
+        if (!hit(b)) { boxes.push(b); g += '<text class="plabel" x="' + lx.toFixed(1) + '" y="' + (py + dy).toFixed(1) + '" text-anchor="' + anchor + '" aria-hidden="true">' + esc(r.name) + "</text>"; break; }
+      }
+    });
+    const label = "Scatter plot of " + rated.length + " programs by headcount and growth rate. " + ["Growing", "Stable", "Declining"].map((st) => rated.filter((r) => r.status === st).length + " " + st).join(", ") + ". Stable band " + pct(-S.trend_band, 1) + " to " + pct(S.trend_band, 1, true) + ". The table below lists every program.";
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+
+  function renderChanges(changes) {
+    if (!changes.length) { $("changes").innerHTML = '<p class="empty">' + (sameSettings(S, M.defaults) ? "None. These are the recipe defaults. Try the tighter trend band to see the labels move." : "None. These settings produce the same labels and tiers as the defaults.") + "</p>"; return; }
+    const why = (r, c) => {
+      if (c.kind === "status") return r.name + " changes " + pct(r.cagr, 1, true) + " a year; the band is now ±" + (S.trend_band * 100).toFixed(2).replace(/0$/, "") + "%.";
+      if (c.kind === "tier") return int(r.now) + " students; Tier lines are now " + S.tier_1 + " · " + S.tier_2 + " · " + S.tier_3 + ".";
+      return pct(r.share, 1) + " of enrollment; the lines are now " + pct(S.concentration_watch, 1) + " (watch) and " + pct(S.concentration_flag, 1) + ".";
+    };
+    const what = (c) => c.kind === "tier" ? "Tier " + c.from + " → Tier " + c.to : c.from + " → " + c.to;
+    const shown = changes.slice().sort((a, b) => b.r.now - a.r.now);
+    $("changes").innerHTML = shown.map(({ r, ch }) =>
+      '<div class="finding"><span class="stripe" aria-hidden="true"></span><div class="body"><div class="top"><strong>' + esc(r.name) + '</strong><span class="sub" style="color:var(--muted);font-size:.86rem">' + esc(r.school) + " · " + esc(levelShort(r.level)) + "</span>" +
+      ch.map((c) => '<span class="pill tag">' + esc(what(c)) + "</span>").join(" ") + "</div>" +
+      ch.map((c) => '<p class="why">' + esc(why(r, c)) + "</p>").join("") + "</div></div>").join("");
+  }
+
+  const COLS = [
+    { k: "name", label: "Program", get: (r) => r.name.toLowerCase() },
+    { k: "first", label: "", num: true, get: (r) => r.start ?? -1 },
+    { k: "now", label: "", num: true, get: (r) => r.now },
+    { k: "trend", label: "Trend", sortable: false },
+    { k: "cagr", label: "Growth rate", num: true, get: (r) => r.cagr ?? -9 },
+    { k: "net", label: "Net change", num: true, get: (r) => r.net ?? -1e9 },
+    { k: "status", label: "Label", get: (r) => ["Declining", "Stable", "Growing", "New"].indexOf(r.status) },
+    { k: "tier", label: "Tier", num: true, get: (r) => r.tier },
+    { k: "share", label: "Share", num: true, get: (r) => r.share },
+    { k: "online", label: "Online", num: true, get: (r) => r.online ?? -1 },
+  ];
+  function renderTable(rows, D, changedKeys) {
+    COLS[1].label = M.years[0]; COLS[2].label = M.years[M.years.length - 1];
+    const col = COLS.find((c) => c.k === sortKey) || COLS[2];
+    const sorted = rows.slice().sort((a, b) => { const x = col.get(a), y = col.get(b); return (x < y ? -1 : x > y ? 1 : 0) * sortDir || b.now - a.now; });
+    let h = "<caption class='sr'>Every " + (level === "all" ? "" : level.toLowerCase() + " ") + "program, sorted by " + esc(col.label) + (sortDir < 0 ? ", highest first" : ", lowest first") + ". Rows marked with a bar changed from the recipe defaults.</caption><thead><tr>";
+    COLS.forEach((c) => {
+      const sortAttr = c.sortable === false ? "" : ' aria-sort="' + (c.k === sortKey ? (sortDir < 0 ? "descending" : "ascending") : "none") + '"';
+      h += '<th scope="col"' + (c.num ? ' class="num"' : "") + sortAttr + ">" + (c.sortable === false ? esc(c.label) : '<button type="button" data-sort="' + c.k + '">' + esc(c.label) + "</button>") + "</th>";
+    });
+    h += "</tr></thead><tbody>";
+    sorted.forEach((r) => {
+      const d = D.byKey.get(r.key), changed = changedKeys.has(r.key);
+      const flags = [r.small ? '<span class="pill warn">Small base</span>' : "", r.conc ? '<span class="pill ' + (r.conc === "Concentration" ? "crit" : "warn") + '">' + esc(r.conc) + "</span>" : ""].filter(Boolean).join(" ");
+      h += "<tr" + (changed ? ' class="changed"' : "") + '><th scope="row" style="text-transform:none;letter-spacing:0;font-size:.92rem;color:var(--ink);background:none;white-space:normal;font-weight:600">' + esc(r.name) + (changed ? '<span class="sr"> (changed from defaults)</span>' : "") +
+        '<span class="sub" style="font-weight:400">' + esc(r.school) + " · " + esc(levelShort(r.level)) + "</span>" + (r.note ? '<span class="note" style="font-weight:400">' + esc(r.note) + "</span>" : "") + "</th>" +
+        '<td class="num">' + (r.start == null ? "—" : int(r.start)) + '</td><td class="num"><strong>' + int(r.now) + "</strong></td><td>" + sparkline(r.hc) + "</td>" +
+        '<td class="num">' + pct(r.cagr, 1, true) + '</td><td class="num">' + (r.net == null ? "—" : signed(r.net)) + "</td>" +
+        "<td>" + pill(r.status) + (d && d.status !== r.status ? '<span class="was">was ' + esc(d.status) + "</span>" : "") + (flags ? '<span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' + flags + "</span>" : "") + "</td>" +
+        '<td class="num">' + r.tier + (d && d.tier !== r.tier ? '<span class="was">was ' + d.tier + "</span>" : "") + '</td><td class="num">' + pct(r.share, 1) + '</td><td class="num">' + (r.online == null ? "—" : pct(r.online, 0)) + "</td></tr>";
+    });
+    $("programs").innerHTML = h + "</tbody>";
+  }
+
+  // ---- Schools ---------------------------------------------------------
+  function renderSchools() {
+    const E = evaluate(M, S), last = M.years.length - 1;
+    const groups = new Map();
+    E.rows.forEach((r) => {
+      const k = r.school + "|" + levelShort(r.level);
+      if (!groups.has(k)) groups.set(k, { school: r.school, level: levelShort(r.level), hc: M.years.map(() => 0), n: 0 });
+      const g = groups.get(k); g.n++; r.hc.forEach((v, i) => (g.hc[i] += v || 0));
+    });
+    const G = [...groups.values()].map((g) => Object.assign(g, { net: g.hc[last] - g.hc[0], cagr: g.hc[0] ? Math.pow(g.hc[last] / g.hc[0], 1 / last) - 1 : null, share: E.total ? g.hc[last] / E.total : 0 }));
+    const lv = (name) => { const s = G.filter((g) => g.level === name); const a = s.reduce((t, g) => t + g.hc[0], 0), b = s.reduce((t, g) => t + g.hc[last], 0); return { a, b, net: b - a, cagr: a ? Math.pow(b / a, 1 / last) - 1 : null, n: s.reduce((t, g) => t + g.n, 0) }; };
+    const ug = lv("Undergraduate"), gr = lv("Graduate"), totNet = ug.net + gr.net, tot0 = ug.a + gr.a;
+    let sig;
+    if (totNet > 0 && gr.net > 0 && gr.net / totNet > 0.5)
+      sig = "<strong>Graduate programs hold " + pct(gr.b / E.total, 0) + " of enrollment but produced " + pct(gr.net / totNet, 0) + " of the five-year gain</strong> (" + signed(gr.net) + " of " + signed(totNet) + " students). Graduate headcount grew " + pct(gr.cagr, 1) + " a year; undergraduate grew " + pct(ug.cagr, 1) + ". No single program shows this. It only appears when the programs are added up.";
+    else if (totNet > 0 && ug.net > 0 && ug.net / totNet > 0.5)
+      sig = "<strong>Undergraduate programs produced " + pct(ug.net / totNet, 0) + " of the five-year gain</strong> (" + signed(ug.net) + " of " + signed(totNet) + "). Undergraduate headcount grew " + pct(ug.cagr, 1, true) + " a year; graduate " + pct(gr.cagr, 1, true) + ".";
+    else sig = "Total headcount changed by <strong>" + signed(totNet) + "</strong> over " + last + " years (" + pct(tot0 ? Math.pow((tot0 + totNet) / tot0, 1 / last) - 1 : 0, 1, true) + " a year). Undergraduate " + signed(ug.net) + ", graduate " + signed(gr.net) + ".";
+    $("signal").innerHTML = sig;
+    $("school-stats").innerHTML = stat(int(E.total), "Students, " + M.years[last]) + stat(signed(totNet), "Change since " + M.years[0], totNet > 0 ? "ok" : totNet < 0 ? "crit" : "") +
+      stat(pct(gr.cagr, 1, true), "Graduate growth per year", "ok") + stat(pct(ug.cagr, 1, true), "Undergraduate growth per year") + stat(pct(gr.b / E.total, 0), "Graduate share of headcount");
+
+    // Net change bars, one row per school and level.
+    const order = G.slice().sort((a, b) => a.school.localeCompare(b.school) || (a.level === "Undergraduate" ? -1 : 1));
+    const W = 940, rowH = 34, T = 16, L = 260, R = 70, H = T + order.length * rowH + 30;
+    const lo = Math.min(0, ...order.map((g) => g.net)), hi = Math.max(1, ...order.map((g) => g.net));
+    const X = (v) => L + ((v - lo) / (hi - lo)) * (W - L - R);
+    let g = '<line class="zero" x1="' + X(0) + '" x2="' + X(0) + '" y1="' + (T - 6) + '" y2="' + (H - 26) + '"/>';
+    let prev = "";
+    order.forEach((d, i) => {
+      const y = T + i * rowH, x0 = X(Math.min(0, d.net)), w = Math.max(2, Math.abs(X(d.net) - X(0)));
+      if (d.school !== prev && i) g += '<line class="grid" x1="12" x2="' + (W - 12) + '" y1="' + (y - 4) + '" y2="' + (y - 4) + '"/>';
+      g += '<text class="rowlabel" x="' + (L - 12) + '" y="' + (y + 18) + '" text-anchor="end">' + (d.school !== prev ? esc(d.school) + " · " : "") + esc(d.level === "Graduate" ? "Grad" : "Undergrad") + "</text>";
+      prev = d.school;
+      g += '<rect class="' + (d.level === "Graduate" ? "bar-grad" : "bar-ug") + '" x="' + x0.toFixed(1) + '" y="' + (y + 5) + '" width="' + w.toFixed(1) + '" height="' + (rowH - 12) + '" rx="3"><title>' + esc(d.school + ", " + d.level + ": " + signed(d.net) + " students (" + int(d.hc[0]) + " to " + int(d.hc[last]) + ")") + "</title></rect>";
+      g += '<text class="barlabel" x="' + (d.net >= 0 ? X(d.net) + 6 : X(d.net) - 6).toFixed(1) + '" y="' + (y + 21) + '" text-anchor="' + (d.net >= 0 ? "start" : "end") + '">' + signed(d.net) + "</text>";
+    });
+    g += '<text class="axistitle" x="' + X(0) + '" y="' + (H - 6) + '" text-anchor="middle">Net change in headcount, ' + esc(M.years[0]) + " to " + esc(M.years[last]) + "</text>";
+    const aria = "Bar chart of net change in headcount by school and level. " + order.map((d) => d.school + " " + d.level + " " + signed(d.net)).join("; ") + ".";
+    $("bars").innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(aria) + '">' + g + "</svg>";
+    $("bars-legend").innerHTML = '<span><svg width="14" height="14" aria-hidden="true"><rect width="14" height="14" rx="3" class="bar-ug"/></svg>Undergraduate</span><span><svg width="14" height="14" aria-hidden="true"><rect width="14" height="14" rx="3" class="bar-grad"/></svg>Graduate</span>';
+
+    $("school-table").innerHTML = "<caption class='sr'>Headcount by school and level</caption><thead><tr><th scope='col'>School</th><th scope='col'>Level</th><th scope='col' class='num'>Programs</th><th scope='col' class='num'>" + esc(M.years[0]) + "</th><th scope='col' class='num'>" + esc(M.years[last]) + "</th><th scope='col' class='num'>Growth rate</th><th scope='col' class='num'>Net change</th><th scope='col' class='num'>Share</th></tr></thead><tbody>" +
+      order.map((d) => "<tr><td>" + esc(d.school) + "</td><td>" + esc(d.level) + '</td><td class="num">' + d.n + '</td><td class="num">' + int(d.hc[0]) + '</td><td class="num">' + int(d.hc[last]) + '</td><td class="num">' + pct(d.cagr, 1, true) + '</td><td class="num">' + signed(d.net) + '</td><td class="num">' + pct(d.share, 1) + "</td></tr>").join("") + "</tbody>";
+
+    const soft = E.rows.filter((r) => r.cagr != null && r.cagr < 0 && r.status === "Stable").sort((a, b) => a.cagr - b.cagr);
+    $("soft-table").innerHTML = soft.length ? "<caption class='sr'>Programs declining inside the Stable band</caption><thead><tr><th scope='col'>Program</th><th scope='col'>School</th><th scope='col' class='num'>" + esc(M.years[0]) + "</th><th scope='col' class='num'>" + esc(M.years[last]) + "</th><th scope='col' class='num'>Growth rate</th><th scope='col' class='num'>Net change</th><th scope='col'>Severity</th></tr></thead><tbody>" +
+      soft.map((r) => "<tr><td><strong>" + esc(r.name) + "</strong>" + (r.small ? ' <span class="pill warn">Small base</span>' : "") + "</td><td>" + esc(r.school) + '</td><td class="num">' + int(r.start) + '</td><td class="num">' + int(r.now) + '</td><td class="num">' + pct(r.cagr, 1, true) + '</td><td class="num">' + signed(r.net) + "</td><td>" + esc(r.severity || "Low") + " (inside the band)</td></tr>").join("") + "</tbody>"
+      : "<tbody><tr><td>No program is losing students inside the Stable band at these thresholds. Any decline is labelled Declining on the Scorecard.</td></tr></tbody>";
+
+    const top = E.rows.slice().sort((a, b) => b.share - a.share).slice(0, 6);
+    $("conc-table").innerHTML = "<caption class='sr'>Six largest programs by share of enrollment</caption><thead><tr><th scope='col'>Program</th><th scope='col' class='num'>" + esc(M.years[last]) + "</th><th scope='col' class='num'>Share</th><th scope='col'>Flag at " + pct(S.concentration_watch, 1) + " / " + pct(S.concentration_flag, 1) + "</th></tr></thead><tbody>" +
+      top.map((r) => "<tr><td><strong>" + esc(r.name) + '</strong></td><td class="num">' + int(r.now) + '</td><td class="num">' + pct(r.share, 1) + "</td><td>" + (r.conc ? '<span class="pill ' + (r.conc === "Concentration" ? "crit" : "warn") + '">' + esc(r.conc) + "</span>" : '<span class="pill ok">No flag</span>') + "</td></tr>").join("") + "</tbody>";
+  }
+
+  // ---- Meta, tabs, source ---------------------------------------------
+  function renderMeta() {
+    const last = M.years.length - 1, total = M.programs.reduce((s, p) => s + (p.hc[last] || 0), 0);
+    $("meta").innerHTML = [["As of", M.meta.as_of], ["Programs", M.programs.length], ["Students, " + M.years[last], int(total)], ["Census", M.meta.census], ["Steward", M.meta.steward], ["Source", "rcu-portfolio.yaml"]]
+      .filter(([, v]) => v != null && v !== "").map(([k, v]) => "<span>" + esc(k) + " <b>" + esc(v) + "</b></span>").join("");
+  }
+  function renderAll() { syncControls(); renderMeta(); renderScorecard(); renderSchools(); }
+
+  const TABS = ["scorecard", "schools", "source"];
+  function show(view, focus) {
+    if (!TABS.includes(view)) view = "scorecard";
+    TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  }
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { history.replaceState(null, "", "#" + b.dataset.view); show(b.dataset.view); } });
+  document.querySelector(".tabs").addEventListener("keydown", (e) => {
+    const i = TABS.indexOf(document.activeElement.dataset.view); if (i < 0) return;
+    const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+    if (j >= 0) { e.preventDefault(); history.replaceState(null, "", "#" + TABS[j]); show(TABS[j], true); }
+  });
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+
+  $("sliders").addEventListener("input", (e) => {
+    const k = e.target.dataset.k; if (!k) return;
+    S[k] = parseFloat(e.target.value); enforceOrder(k); renderAll();
+  });
+  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; S = Object.assign({}, M.defaults, PRESETS.find((p) => p.id === b.dataset.preset).set); renderAll(); });
+  $("levels").addEventListener("click", (e) => { const b = e.target.closest("[data-level]"); if (!b) return; level = b.dataset.level; renderAll(); });
+  $("programs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort]"); if (!b) return;
+    if (sortKey === b.dataset.sort) sortDir = -sortDir; else { sortKey = b.dataset.sort; sortDir = sortKey === "name" ? 1 : -1; }
+    renderScorecard(); const nb = document.querySelector('[data-sort="' + sortKey + '"]'); if (nb) nb.focus();
+  });
+
+  const status = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
+  $("apply").addEventListener("click", () => {
+    try { const next = build($("yaml-src").value); const keep = !sameSettings(S, M.defaults); M = next; if (!keep) S = Object.assign({}, M.defaults); renderAll(); status("Applied. " + M.programs.length + " programs. Every view now reflects your edits" + (keep ? "; your slider settings were kept." : "."), "ok"); }
+    catch (err) { status("Not applied. " + err.message, "err"); }
+  });
+  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; M = build(ORIGINAL); S = Object.assign({}, M.defaults); renderAll(); status("Reset to the original source.", "ok"); });
+  $("copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("yaml-src").value); status("Copied to the clipboard.", "ok"); }
+    catch { $("yaml-src").select(); status("Select all and copy with your keyboard; this browser blocked clipboard access.", ""); }
+  });
+
+  // ---- Boot ------------------------------------------------------------
+  renderSliders();
+  $("yaml-src").value = ORIGINAL;
+  try { M = build(ORIGINAL); S = Object.assign({}, M.defaults); renderAll(); }
+  catch (err) { $("narrative").textContent = err.message; }
+  show(location.hash.slice(1) || "scorecard");
+})();
+</script>
+</body>
+</html>

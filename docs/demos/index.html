@@ -11,9 +11,9 @@
 @media (prefers-color-scheme:dark){:root{--bg:#141a1b;--ink:#ecefef;--muted:#b3bcbd;--teal:#7cc0c1;--line:#2c3638;--card:#1b2324}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:1.05rem/1.55 "IBM Plex Sans",system-ui,sans-serif}
-main{max-width:760px;margin:0 auto;padding:48px max(16px,env(safe-area-inset-left)) 64px}
+main{max-width:760px;margin:0 auto;display:grid;gap:20px;padding:48px max(16px,env(safe-area-inset-left)) 64px}
 h1{font:700 clamp(2rem,5vw,2.8rem)/1.1 "Bricolage Grotesque",system-ui,sans-serif;color:var(--teal);margin:0 0 8px}
-p.lede{color:var(--muted);margin:0 0 32px}
+p.lede{color:var(--muted);margin:0 0 12px}
 a{color:var(--teal)}
 .card{display:grid;gap:12px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--card);text-decoration:none;color:inherit}
 .card:hover,.card:focus-visible{border-color:var(--teal)}
@@ -34,6 +34,12 @@ footer{margin-top:40px;font-size:.92rem;color:var(--muted)}
     <h2>RCU Systems Atlas</h2>
     <img src="rcu-atlas/preview.png" alt="Impact radius for replacing the recruitment CRM, grouped by layer." width="2296" height="992">
     <p>One source file of systems and interfaces, rendered on demand as an impact radius, a system-of-record map, and a drift report.</p>
+  </a>
+  <a class="card" href="rcu-portfolio/">
+    <span class="tag">Test Kitchen</span>
+    <h2>RCU Portfolio Explorer</h2>
+    <img src="rcu-portfolio/preview.png" alt="Programs plotted by headcount and growth rate. With a tighter trend band, eleven programs change label." width="2296" height="1260">
+    <p>Five years of program enrollment in one source file. Move the recipe's thresholds and watch programs reclassify, then see which schools the growth came from.</p>
   </a>
   <footer>Source and licences on <a href="https://github.com/rjoy28/higher-ed-ai-cookbook">GitHub</a>. Writing CC BY-NC-SA 4.0; code MIT.</footer>
 </main>

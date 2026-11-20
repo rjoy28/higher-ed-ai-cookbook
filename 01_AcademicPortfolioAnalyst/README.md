@@ -84,6 +84,8 @@ License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit,
 
 ## Sample output
 
+Try it interactively: the [RCU Portfolio Explorer](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-portfolio/) applies this recipe's rules to the same fictional data and lets you move the thresholds.
+
 ![Sample output chart for the fictional RCU institution](fig_01_academic_portfolio.png)
 
 ---

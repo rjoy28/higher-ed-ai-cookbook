@@ -1,0 +1,101 @@
+# RCU Portfolio Explorer: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the demo. Every chart, table, and
+# finding on the page is computed from it. Change the file, and the views change.
+#
+# Shape: this is the Academic Portfolio Analyst Input Template (one row per program
+# per year), folded so each program carries its five census headcounts in order.
+#
+# Schema
+#   meta       institution, census years in order, census date, steward
+#   settings   the recipe's configurable thresholds (the Input Template's Config tab)
+#   programs   name, level, school, online share in the latest year, headcount by
+#              year (same order as meta.years), and an optional note
+#
+# Rules the page applies (same as the recipe's Sources & Methodology tab)
+#   growth rate  CAGR = (latest / earliest) ^ (1 / (years - 1)) - 1
+#   trend        Growing above +trend_band, Declining below -trend_band, else Stable
+#   tier         Tier 1 >= tier_1, Tier 2 >= tier_2, Tier 3 >= tier_3, else Tier 4
+#   share        latest headcount / total latest headcount
+#   concentration  share >= concentration_flag; watch >= concentration_watch
+#   small base   latest headcount below small_base: read net change, not the rate
+#   severity     High when CAGR < -5% and headcount < tier_2
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-20"
+  years: [Fall 2022, Fall 2023, Fall 2024, Fall 2025, Fall 2026]
+  census: Fourth Friday of the fall term
+  steward: Institutional Research
+  fixture: true
+
+settings:
+  tier_1: 50
+  tier_2: 20
+  tier_3: 8
+  trend_band: 0.03
+  concentration_flag: 0.15
+  concentration_watch: 0.10
+  small_base: 30
+
+programs:
+
+  # Arts & Sciences
+  - {name: "English", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [62, 61, 60, 59, 58],
+     note: "Also carries most first-year composition sections, so major headcount understates its load."}
+  - {name: "History", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [45, 44, 43, 43, 42]}
+  - {name: "Communication", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [66, 67, 68, 70, 71]}
+  - {name: "Philosophy", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [24, 24, 24, 24, 24]}
+  - {name: "Music", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Biology", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [96, 96, 96, 96, 96]}
+  - {name: "Chemistry", level: Undergraduate, school: "Arts & Sciences", online: 0, headcount: [34, 34, 34, 34, 34]}
+  - {name: "Mathematics", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 29, 29, 29]}
+  - {name: "Environmental Science", level: Undergraduate, school: "Arts & Sciences", online: 0.03, headcount: [29, 29, 30, 30, 31]}
+  - {name: "Exercise Science", level: Undergraduate, school: "Arts & Sciences", online: 0.07, headcount: [78, 79, 81, 82, 84]}
+  - {name: "Psychology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [109, 111, 114, 116, 118]}
+  - {name: "Sociology", level: Undergraduate, school: "Arts & Sciences", online: 0.13, headcount: [39, 39, 39, 39, 39]}
+  - {name: "Criminal Justice", level: Undergraduate, school: "Arts & Sciences", online: 0.26, headcount: [52, 52, 52, 52, 52]}
+  - {name: "Political Science", level: Undergraduate, school: "Arts & Sciences", online: 0.1, headcount: [23, 23, 23, 22, 22]}
+  - {name: "MA Christian Thought", level: Graduate, school: "Arts & Sciences", online: 0.36, headcount: [19, 20, 21, 21, 22]}
+
+  # Business & Leadership
+  - {name: "Business Administration", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [128, 128, 128, 128, 128],
+     note: "Largest program. Its catalog page was last edited in Publisher by a registrar who retired in 2021."}
+  - {name: "Management & Leadership", level: Undergraduate, school: "Business & Leadership", online: 0.43, headcount: [56, 58, 59, 60, 61]}
+  - {name: "Sport Management", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [68, 70, 71, 73, 74],
+     note: "Launched Fall 2022 with a transfer cohort; athletics still calls it “the new major.”"}
+  - {name: "Accounting", level: Undergraduate, school: "Business & Leadership", online: 0.16, headcount: [32, 32, 32, 32, 32]}
+  - {name: "Marketing", level: Undergraduate, school: "Business & Leadership", online: 0.2, headcount: [38, 38, 38, 38, 38]}
+  - {name: "Finance", level: Undergraduate, school: "Business & Leadership", online: 0.13, headcount: [26, 26, 26, 26, 26]}
+  - {name: "Healthcare Administration", level: Undergraduate, school: "Business & Leadership", online: 0.46, headcount: [17, 17, 17, 18, 18],
+     note: "Two adjunct-taught sections. The clinical-partner agreement lives in a binder in the dean’s office."}
+  - {name: "MBA", level: Graduate, school: "Business & Leadership", online: 0.56, headcount: [83, 86, 89, 92, 95],
+     note: "Online cohorts start in August and January; census counts only the August start."}
+  - {name: "MS Organizational Leadership", level: Graduate, school: "Business & Leadership", online: 0.59, headcount: [42, 43, 45, 46, 48]}
+
+  # Education
+  - {name: "Elementary Education", level: Undergraduate, school: "Education", online: 0.03, headcount: [78, 78, 78, 78, 78]}
+  - {name: "Middle Grades Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [25, 25, 25, 24, 24]}
+  - {name: "Secondary Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [41, 41, 41, 41, 41]}
+  - {name: "Special Education", level: Undergraduate, school: "Education", online: 0.13, headcount: [35, 36, 37, 37, 38]}
+  - {name: "Physical Education", level: Undergraduate, school: "Education", online: 0.07, headcount: [26, 26, 26, 26, 26]}
+  - {name: "MAT", level: Graduate, school: "Education", online: 0.3, headcount: [35, 36, 37, 39, 40]}
+  - {name: "MEd", level: Graduate, school: "Education", online: 0.49, headcount: [48, 50, 51, 53, 55]}
+  - {name: "EdD", level: Graduate, school: "Education", online: 0.59, headcount: [33, 34, 35, 37, 38]}
+
+  # Ministry & Theology
+  - {name: "Biblical Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [44, 44, 44, 44, 44]}
+  - {name: "Christian Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [58, 58, 58, 58, 58]}
+  - {name: "Missions & Intercultural Studies", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [29, 28, 28, 27, 27],
+     note: "Mission-central. Two of the last five study-abroad partners have closed."}
+  - {name: "Youth Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.13, headcount: [49, 49, 49, 49, 49]}
+  - {name: "Worship Leadership", level: Undergraduate, school: "Ministry & Theology", online: 0.07, headcount: [40, 41, 41, 42, 43]}
+  - {name: "Pastoral Ministry", level: Undergraduate, school: "Ministry & Theology", online: 0.16, headcount: [36, 36, 36, 36, 36]}
+  - {name: "Christian Education", level: Undergraduate, school: "Ministry & Theology", online: 0.2, headcount: [22, 22, 22, 21, 21]}
+  - {name: "Theology", level: Undergraduate, school: "Ministry & Theology", online: 0.1, headcount: [30, 30, 30, 30, 30]}
+  - {name: "MDiv", level: Graduate, school: "Ministry & Theology", online: 0.3, headcount: [37, 38, 39, 41, 42]}
+  - {name: "MA Biblical Studies", level: Graduate, school: "Ministry & Theology", online: 0.39, headcount: [17, 18, 19, 19, 20]}
+  - {name: "MA Christian Counseling", level: Graduate, school: "Ministry & Theology", online: 0.36, headcount: [29, 30, 31, 32, 33]}
+  - {name: "MA Worship Leadership", level: Graduate, school: "Ministry & Theology", online: 0.33, headcount: [21, 22, 22, 23, 24]}

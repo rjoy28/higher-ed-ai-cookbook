@@ -16,4 +16,6 @@
 
 **Worked example:** [RCU Systems Atlas](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-atlas/), built on the fictional Riverside Christian University fixture. Source: [`rcu-systems.yaml`](../test-kitchen/rcu-systems-atlas/rcu-systems.yaml).
 
+**Second example:** [RCU Portfolio Explorer](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-portfolio/), where the source holds program enrollment and the recipe's own thresholds. Moving a threshold re-renders every view, which shows which findings are facts and which are settings. Source: [`rcu-portfolio.yaml`](../test-kitchen/rcu-portfolio-explorer/rcu-portfolio.yaml).
+
 *Status: draft, in the Test Kitchen.*
