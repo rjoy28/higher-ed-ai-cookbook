@@ -1,6 +1,6 @@
 # Strategic Plan KPI Scorecard
 
-*Higher Ed AI Cookbook · Recipe · Free to use*
+*Higher Ed AI Cookbook · Recipe · CC BY-NC-SA 4.0*
 
 A reusable AI recipe that assembles your strategic goals into a quantitative scorecard — baseline, current, target, % to goal, and on/off-track status — reading across your other reports. It is the numeric complement to the Board/Cabinet Brief, and it carries figures with their sources.
 
@@ -76,7 +76,7 @@ If you are holding this recipe with no author in the room, here is the orientati
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legible source of truth is the underlying source reports it cites, not any hidden state. Before you trust this agent with a real decision, find a competent human — the president’s office or the board — and have them check the read against your institution’s reality. An orphaned agent should point you at a person, not at itself.
 
-*License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
+*License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit, and share adaptations under the same terms. Commercial use, white-label, or resale requires permission — contact the Cookbook. Sample data is fictional.*
 
 ## Sample output
 

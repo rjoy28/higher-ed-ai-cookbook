@@ -1,6 +1,6 @@
 # RCU Systems Atlas
 
-*Higher Ed AI Cookbook · Test Kitchen · Free to use*
+*Higher Ed AI Cookbook · Test Kitchen · CC BY-NC-SA 4.0*
 
 One YAML file describes every system, interface, and owner at a fictional university. A single page renders it on demand as an impact radius, a system-of-record matrix, and a drift report.
 

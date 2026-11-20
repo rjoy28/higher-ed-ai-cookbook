@@ -1,6 +1,6 @@
 # Institutional Style Checker
 
-*Higher Ed AI Cookbook · Recipe · Free to use*
+*Higher Ed AI Cookbook · Recipe · CC BY-NC-SA 4.0*
 
 A reusable AI recipe that checks copy against your institutional style dictionary — preferred, accepted-variant, and banned terms — and flags issues with the preferred fix, so writing stays on-brand and on-mission. It flags; a human approves each change.
 
@@ -78,7 +78,7 @@ If you are holding this recipe with no author in the room, here is the orientati
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legible source of truth is the returned workbook and your dictionary, not any hidden state. Before you trust this agent with a real decision, find a competent human — a communications editor — and have them check the read against your institution’s reality. An orphaned agent should point you at a person, not at itself.
 
-*License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
+*License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit, and share adaptations under the same terms. Commercial use, white-label, or resale requires permission — contact the Cookbook. Sample data is fictional.*
 
 ## Sample output
 

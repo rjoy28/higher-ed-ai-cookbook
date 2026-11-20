@@ -1,6 +1,6 @@
 # Academic Portfolio Analyst
 
-*Higher Ed AI Cookbook · Recipe · Free to use*
+*Higher Ed AI Cookbook · Recipe · CC BY-NC-SA 4.0*
 
 A reusable AI recipe that turns an institution's program-enrollment export into a portfolio health read: which programs anchor the institution, which are quietly declining, where concentration risk sits, and what to do about it — with every recommendation labelled by how much you should trust it.
 
@@ -80,7 +80,7 @@ If you're holding this recipe with no author in the room, here's the orientation
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. Before you trust this agent with a real decision, find a competent human — an IR analyst, provost, or accreditation-fluent colleague — and have them check the read against your institution's reality. An orphaned agent should point you at a person, not at itself.
 
-License: free to use and adapt for your own institution. White-label / resale rights are separate — contact the Cookbook. Build 2026-07. Sample data is fictional.
+License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit, and share adaptations under the same terms. Commercial use, white-label, or resale requires permission — contact the Cookbook. Build 2026-07. Sample data is fictional.
 
 ## Sample output
 

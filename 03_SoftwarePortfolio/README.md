@@ -1,6 +1,6 @@
 # Software Portfolio Analyst
 
-*Higher Ed AI Cookbook · Recipe · Free to use*
+*Higher Ed AI Cookbook · Recipe · CC BY-NC-SA 4.0*
 
 A reusable AI recipe that turns a license inventory into a portfolio read: which tools are healthy, which sit idle, where you own the same capability twice, and which renewals to negotiate first — with every recommendation labelled by how much you should trust it.
 
@@ -56,7 +56,7 @@ Defaults are set for a small institution. Override in the Input Template’s Con
 
 - Renewal horizon: flag renewals within 120 days
 
-- Scope: which license types to exclude (e.g. free tiers)
+- Scope: which license types to exclude (e.g. no-cost tiers)
 
 ## What it deliberately does NOT do
 
@@ -82,7 +82,7 @@ If you are holding this recipe with no author in the room, here is the orientati
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legible source of truth is the returned workbook, not any hidden state. Before you trust this agent with a real decision, find a competent human — a CIO or procurement lead — and have them check the read against your institution’s reality. An orphaned agent should point you at a person, not at itself.
 
-*License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
+*License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit, and share adaptations under the same terms. Commercial use, white-label, or resale requires permission — contact the Cookbook. Sample data is fictional.*
 
 ## Sample output
 

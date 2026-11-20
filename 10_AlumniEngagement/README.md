@@ -1,6 +1,6 @@
 # Alumni Engagement Analyst
 
-*Higher Ed AI Cookbook · Recipe · Free to use*
+*Higher Ed AI Cookbook · Recipe · CC BY-NC-SA 4.0*
 
 A reusable AI recipe that reads alumni engagement as a portfolio over time — events, email, volunteering, and giving participation by class-year band — so you can see which cohorts are engaged and where the giving pipeline leaks, with every recommendation labelled by how much you should trust it.
 
@@ -78,7 +78,7 @@ If you are holding this recipe with no author in the room, here is the orientati
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legible source of truth is the returned workbook, not any hidden state. Before you trust this agent with a real decision, find a competent human — an alumni-relations director — and have them check the read against your institution’s reality. An orphaned agent should point you at a person, not at itself.
 
-*License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
+*License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit, and share adaptations under the same terms. Commercial use, white-label, or resale requires permission — contact the Cookbook. Sample data is fictional.*
 
 ## Sample output
 

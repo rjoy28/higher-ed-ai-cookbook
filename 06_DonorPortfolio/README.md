@@ -1,6 +1,6 @@
 # Donor Portfolio Analyst
 
-*Higher Ed AI Cookbook · Recipe · Free to use*
+*Higher Ed AI Cookbook · Recipe · CC BY-NC-SA 4.0*
 
 A reusable AI recipe that reads giving by donor segment as a portfolio — which segments anchor the fund, which are growing, where concentration risk sits, and where lapsed donors can be recovered — with every recommendation labelled by how much you should trust it.
 
@@ -80,7 +80,7 @@ If you are holding this recipe with no author in the room, here is the orientati
 
 Built by Renee Handy · Higher Ed AI Cookbook · build 2026-07. The human-legible source of truth is the returned workbook, not any hidden state. Before you trust this agent with a real decision, find a competent human — a VP of advancement — and have them check the read against your institution’s reality. An orphaned agent should point you at a person, not at itself.
 
-*License: free to use and adapt for your own institution. White-label / resale rights reserved — contact the Cookbook. Sample data is fictional.*
+*License: CC BY-NC-SA 4.0. Use and adapt it for your own institution with credit, and share adaptations under the same terms. Commercial use, white-label, or resale requires permission — contact the Cookbook. Sample data is fictional.*
 
 ## Sample output
 
