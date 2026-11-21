@@ -14,7 +14,7 @@ One YAML file describes every system, interface, and owner at a fictional univer
 - **Ownership.** Which system holds the official record for each kind of data at each lifecycle stage, for students and for employees. Two systems claiming the same stage is a conflict; an interior blank is a gap. The systems list shows how people sign in to each one.
 - **Drift.** The source's claims checked against telemetry snapshots: links that should run but don't, jobs that run but aren't documented, applications with no sign-in path on record, owner mismatches, and claims past their verification date.
 - **Regulatory flags.** FERPA, GLBA, Title IV and IPEDS tags filter every view, down to the field.
-- **Source.** Edit the YAML in the page and every view redraws.
+- **Behind the page.** Open the Source file drawer below the views, edit the YAML, and every view redraws ([content first, machinery behind](../../patterns/content-first.md)).
 
 ## How links are modeled
 

@@ -20,6 +20,6 @@
 
 **In practice:** Each demo has its analysis tabs, then a "Behind the page" section with a short note on where the page comes from and a collapsible **Source file** drawer holding the YAML editor and schema. The footer links to `#source`, and loading the page with `#source` in the address opens the drawer.
 
-**Worked examples:** [RCU Portfolio Explorer](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-portfolio/), [RCU Program Economics](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-economics/), and [RCU IT Service Health](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-service-health/). In the last one the pre-flight check stays in the content area: data quality is a finding about the export, and a real service desk would want to see it.
+**Worked examples:** [RCU Systems Atlas](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-atlas/), [RCU Portfolio Explorer](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-portfolio/), [RCU Program Economics](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-economics/), and [RCU IT Service Health](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-service-health/). In the last one the pre-flight check stays in the content area: data quality is a finding about the export, and a real service desk would want to see it.
 
 *Status: draft, in the Test Kitchen.*
