@@ -142,6 +142,15 @@ textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); col
 .schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
 .schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
 .schema dd { margin: 0 0 6px; color: var(--muted); }
+details.collapse { display: grid; gap: 10px; }
+details.collapse > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 0; min-height: 44px; }
+details.collapse > summary::-webkit-details-marker { display: none; }
+details.collapse > summary::before { content: "▸"; color: var(--accent); font-size: 1.1rem; width: 1ch; }
+details.collapse[open] > summary::before { content: "▾"; }
+details.collapse > summary h2 { display: inline; }
+details.collapse > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+details.collapse[open] > .collapse-note { margin: 2px 0 10px; }
+.collapse-note { color: var(--muted); max-width: 76ch; }
 footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
 @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
 </style>
@@ -179,11 +188,11 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
       <div class="legend" id="scatter-legend"></div>
     </div>
 
-    <div class="section-head">
-      <h2>Changed from the recipe defaults</h2>
-      <p>Programs whose label or tier differs from what the source file's settings produce. Nothing about the programs changed. Only the lines moved.</p>
-    </div>
-    <div class="findings" id="changes"></div>
+    <details class="collapse">
+      <summary><h2>Changed from the recipe defaults</h2><span class="pill tag" id="changes-count">None</span></summary>
+      <p class="collapse-note">Programs whose label or tier differs from what the source file's settings produce. Nothing about the programs changed. Only the lines moved.</p>
+      <div class="findings" id="changes"></div>
+    </details>
 
     <div class="section-head">
       <h2>Every program</h2>
@@ -603,6 +612,7 @@ programs:
   }
 
   function renderChanges(changes) {
+    $("changes-count").textContent = changes.length ? changes.length + " program" + (changes.length === 1 ? "" : "s") : "None";
     if (!changes.length) { $("changes").innerHTML = '<p class="empty">' + (sameSettings(S, M.defaults) ? "None. These are the recipe defaults. Try the tighter trend band to see the labels move." : "None. These settings produce the same labels and tiers as the defaults.") + "</p>"; return; }
     const why = (r, c) => {
       if (c.kind === "status") return r.name + " changes " + pct(r.cagr, 1, true) + " a year; the band is now ±" + (S.trend_band * 100).toFixed(2).replace(/0$/, "") + "%.";

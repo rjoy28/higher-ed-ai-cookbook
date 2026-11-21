@@ -164,14 +164,6 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
     <div class="meta" id="meta"></div>
   </header>
 
-  <div class="settings" role="group" aria-labelledby="settings-title">
-    <div class="settings-head">
-      <h2 id="settings-title" style="font-size:1.15rem">Rules</h2>
-      <div class="group" role="group" aria-labelledby="preset-label"><span class="lbl" id="preset-label">Try</span><span id="presets" class="group"></span></div>
-    </div>
-    <p class="settings-note">Aid is reported by segment, not by program, so every program in a segment gets the same discount unless you give online students their own rate. Moving an online rate moves aid between online and campus students; the segment's total aid stays the same.</p>
-    <div class="sliders" id="sliders"></div>
-  </div>
 
   <div class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" id="tab-revenue" aria-controls="revenue" data-view="revenue">Revenue</button>
@@ -181,7 +173,19 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
   </div>
 
   <section class="panel" role="tabpanel" id="revenue" aria-labelledby="tab-revenue">
+    <div class="settings" role="group" aria-labelledby="rev-rules-title" style="margin-top:0">
+      <div class="settings-head">
+        <h2 id="rev-rules-title" style="font-size:1.15rem">Revenue rules</h2>
+        <div class="group" role="group" aria-labelledby="rev-preset-label"><span class="lbl" id="rev-preset-label">Try</span><span id="rev-presets" class="group" data-presets="rev"></span></div>
+      </div>
+      <p class="settings-note">Aid is reported by segment, not by program, so every program in a segment gets the same discount unless you give online students their own rate. Moving an online rate shifts aid between online and campus students and reorders the programs. Each segment's total aid stays the same.</p>
+      <div class="sliders" id="rev-sliders" data-sliders="rev"></div>
+    </div>
     <p class="narrative" id="rev-narrative" aria-live="polite"></p>
+    <div class="section-head">
+      <h3>From the aid summary</h3>
+      <p>These are segment totals. The rules decide how they are split across programs, so they do not move with the online sliders. The discount goal changes only the color of the rate.</p>
+    </div>
     <div class="stats" id="rev-stats"></div>
 
     <div class="figure">
@@ -206,6 +210,14 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
   </section>
 
   <section class="panel" role="tabpanel" id="teaching" aria-labelledby="tab-teaching" hidden>
+    <div class="settings" role="group" aria-labelledby="teach-rules-title" style="margin-top:0">
+      <div class="settings-head">
+        <h2 id="teach-rules-title" style="font-size:1.15rem">Section rules</h2>
+        <div class="group" role="group" aria-labelledby="teach-preset-label"><span class="lbl" id="teach-preset-label">Try</span><span id="teach-presets" class="group" data-presets="teach"></span></div>
+      </div>
+      <p class="settings-note">Recipe 16's flags for this term's sections, and how far a program's share of seats can drift from its share of net tuition before it is flagged.</p>
+      <div class="sliders" id="teach-sliders" data-sliders="teach"></div>
+    </div>
     <p class="narrative" id="teach-narrative" aria-live="polite"></p>
     <p class="narrative" id="teach-narrative2"></p>
     <div class="stats" id="teach-stats"></div>
@@ -695,24 +707,32 @@ programs:
   // ---- State -----------------------------------------------------------
   let M, S, revSort = "netNow", revDir = -1, loadSort = "gap", loadDir = -1;
   const sliderDefs = () => [
-    ...Object.keys(M.segments).map((k) => ({ k: "online:" + k, label: (isUG(k) ? "Undergraduate" : k) + " online aid rate", min: 0, max: Math.floor(M.onlineMax[k] * 200) / 200, step: 0.005,
+    ...Object.keys(M.segments).map((k) => ({ k: "online:" + k, tab: "rev", label: (isUG(k) ? "Undergraduate" : k) + " online aid rate", min: 0, max: Math.floor(Math.min(M.onlineMax[k], 0.95) * 200) / 200, step: 0.005,
       get: () => S.online[k], set: (v) => (S.online[k] = v), def: () => M.defaults.online[k],
-      fmt: (v) => v == null ? "Segment rate" : pct(v, 1), valueOf: (v) => (v == null ? lastDisc(k) : v) })),
-    { k: "discount_goal", label: "Discount goal", min: 0.3, max: 0.7, step: 0.005, fmt: (v) => pct(v, 1) },
-    { k: "cancel_below", label: "Under-enrolled below", min: 2, max: 25, step: 1, fmt: (v) => int(v) + " students" },
-    { k: "near_cap", label: "Near cap at", min: 0.7, max: 1, step: 0.01, fmt: (v) => pct(v, 0) + " full" },
-    { k: "load_gap", label: "Flag a share gap over", min: 0.005, max: 0.04, step: 0.0025, fmt: (v) => (v * 100).toFixed(2).replace(/0$/, "") + " pts" },
+      fmt: (v) => v == null ? "Segment rate" : pct(v, 1), shownValue: (v) => (v == null ? lastDisc(k) : v) })),
+    { k: "discount_goal", tab: "rev", label: "Discount goal", min: 0.3, max: 0.7, step: 0.005, fmt: (v) => pct(v, 1) },
+    { k: "cancel_below", tab: "teach", label: "Under-enrolled below", min: 2, max: 25, step: 1, fmt: (v) => int(v) + " students" },
+    { k: "near_cap", tab: "teach", label: "Near cap at", min: 0.7, max: 1, step: 0.01, fmt: (v) => pct(v, 0) + " full" },
+    { k: "load_gap", tab: "teach", label: "Flag a share gap over", min: 0.005, max: 0.04, step: 0.0025, fmt: (v) => (v * 100).toFixed(2).replace(/0$/, "") + " pts" },
   ];
   const lastDisc = (k) => { const g = M.segments[k], i = M.years.length - 1; return g.gross[i] ? g.aid[i] / g.gross[i] : 0; };
   const getS = (d) => d.get ? d.get() : S[d.k];
   const defS = (d) => d.def ? d.def() : M.defaults[d.k];
   const PRESETS = () => [
-    { id: "defaults", label: "Recipe defaults", set: {} },
-    { id: "online", label: "Online students aided less", set: { online: Object.fromEntries(Object.keys(M.segments).map((k) => [k, Math.min(M.onlineMax[k], Math.round(lastDisc(k) * 0.55 * 200) / 200)])) } },
-    { id: "strict", label: "Stricter section review", set: { cancel_below: 15, near_cap: 0.85 } },
+    { id: "defaults", tab: "rev", label: "Recipe defaults", set: {} },
+    { id: "online", tab: "rev", label: "Online students aided less", set: { online: Object.fromEntries(Object.keys(M.segments).map((k) => [k, Math.min(M.onlineMax[k], Math.round(lastDisc(k) * 0.55 * 200) / 200)])) } },
+    { id: "defaults", tab: "teach", label: "Recipe defaults", set: {} },
+    { id: "strict", tab: "teach", label: "Stricter section review", set: { cancel_below: 15, near_cap: 0.85 } },
   ];
-  const presetState = (p) => Object.assign({}, M.defaults, p.set, { online: Object.assign({}, M.defaults.online, p.set.online || {}) });
-  const same = (a, b) => NUM_KEYS.every((k) => Math.abs(a[k] - b[k]) < 1e-9) && Object.keys(M.segments).every((k) => (a.online[k] == null && b.online[k] == null) || (a.online[k] != null && b.online[k] != null && Math.abs(a.online[k] - b.online[k]) < 1e-9));
+  const TAB_KEYS = { rev: ["discount_goal"], teach: ["cancel_below", "near_cap", "load_gap"] };
+  // A preset sets its own tab's rules (defaults plus its changes) and leaves the other tab's rules alone.
+  const presetState = (p, from) => {
+    const base = cloneS(from || S), full = Object.assign({}, M.defaults, p.set);
+    TAB_KEYS[p.tab].forEach((k) => (base[k] = full[k]));
+    if (p.tab === "rev") base.online = Object.assign({}, M.defaults.online, p.set.online || {});
+    return base;
+  };
+  const sameTab = (a, b, tab) => TAB_KEYS[tab].every((k) => Math.abs(a[k] - b[k]) < 1e-9) && (tab !== "rev" || Object.keys(M.segments).every((k) => (a.online[k] == null && b.online[k] == null) || (a.online[k] != null && b.online[k] != null && Math.abs(a.online[k] - b.online[k]) < 1e-9)));
   const cloneS = (x) => Object.assign({}, x, { online: Object.assign({}, x.online), scen: { disc: Object.assign({}, x.scen.disc), resp: x.scen.resp } });
 
   // ---- Helpers ---------------------------------------------------------
@@ -736,22 +756,25 @@ programs:
 
   // ---- Settings UI -------------------------------------------------------
   function renderSliders() {
-    $("sliders").innerHTML = sliderDefs().map((s) =>
+    ["rev", "teach"].forEach((tab) => {
+    $(tab + "-sliders").innerHTML = sliderDefs().filter((s) => s.tab === tab).map((s) =>
       '<div class="slider"><label for="s-' + s.k + '"><span>' + esc(s.label) + '</span><output id="o-' + s.k + '" for="s-' + s.k + '"></output></label>' +
       '<input type="range" id="s-' + s.k + '" data-k="' + s.k + '" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '"></div>').join("");
-    $("presets").innerHTML = PRESETS().map((p) => '<button type="button" class="chipbtn" data-preset="' + p.id + '" aria-pressed="false">' + esc(p.label) + "</button>").join("");
+    $(tab + "-presets").innerHTML = PRESETS().filter((p) => p.tab === tab).map((p) => '<button type="button" class="chipbtn" data-tab="' + tab + '" data-preset="' + p.id + '" aria-pressed="false">' + esc(p.label) + "</button>").join("");
+    });
   }
+  const findPreset = (b) => PRESETS().find((p) => p.id === b.dataset.preset && p.tab === b.dataset.tab);
   function syncControls() {
     sliderDefs().forEach((s) => {
       const el = $("s-" + s.k), o = $("o-" + s.k), v = getS(s);
-      const shown = s.valueOf ? s.valueOf(v) : v;
+      const shown = s.shownValue ? s.shownValue(v) : v;
       el.value = shown;
-      const txt = s.fmt(v) + (s.valueOf && v == null ? " (" + pct(shown, 1) + ")" : "");
+      const txt = s.fmt(v) + (s.shownValue && v == null ? " (" + pct(shown, 1) + ")" : "");
       el.setAttribute("aria-valuetext", txt); o.textContent = txt;
       const d = defS(s);
       o.classList.toggle("changed", !((v == null && d == null) || (v != null && d != null && Math.abs(v - d) < 1e-9)));
     });
-    document.querySelectorAll("[data-preset]").forEach((b) => b.setAttribute("aria-pressed", String(same(S, presetState(PRESETS().find((p) => p.id === b.dataset.preset))))));
+    document.querySelectorAll("[data-preset][data-tab]").forEach((b) => b.setAttribute("aria-pressed", String(sameTab(S, presetState(findPreset(b)), b.dataset.tab))));
   }
 
   // ---- Revenue ---------------------------------------------------------
@@ -978,7 +1001,7 @@ programs:
   const scenDefs = () => [
     ...Object.keys(M.segments).map((k) => ({ k: "disc:" + k, label: (isUG(k) ? "Undergraduate" : k) + " discount rate", min: 0.3, max: 0.75, step: 0.0025,
       get: () => S.scen.disc[k], set: (v) => (S.scen.disc[k] = Math.abs(v - todayRate(k)) < 0.00125 ? null : v), def: () => M.defaults.scen.disc[k],
-      fmt: (v) => (v == null ? "Today (" + pct(todayRate(k), 1) + ")" : pct(v, 2).replace(/0%$/, "%")), valueOf: (v) => (v == null ? todayRate(k) : v), minFor: () => (isUG(k) ? 0.3 : 0), maxFor: () => (isUG(k) ? 0.75 : 0.4) })),
+      fmt: (v) => (v == null ? "Today (" + pct(todayRate(k), 1) + ")" : pct(v, 2).replace(/0%$/, "%")), shownValue: (v) => (v == null ? todayRate(k) : v), minFor: () => (isUG(k) ? 0.3 : 0), maxFor: () => (isUG(k) ? 0.75 : 0.4) })),
     { k: "resp", label: "Students lost per point cut", min: 0, max: 0.03, step: 0.001, get: () => S.scen.resp, set: (v) => (S.scen.resp = v), def: () => M.defaults.scen.resp,
       fmt: (v) => (v ? (v * 100).toFixed(1) + "% of the segment" : "None (headcount held)") },
   ];
@@ -999,7 +1022,7 @@ programs:
   function syncScen() {
     scenDefs().forEach((s) => {
       const el = $("s-" + s.k), o = $("o-" + s.k); if (!el) return;
-      const v = s.get(), shown = s.valueOf ? s.valueOf(v) : v;
+      const v = s.get(), shown = s.shownValue ? s.shownValue(v) : v;
       el.value = shown; const txt = s.fmt(v); el.setAttribute("aria-valuetext", txt); o.textContent = txt;
       const d = s.def(); o.classList.toggle("changed", !((v == null && d == null) || (v != null && d != null && Math.abs(v - d) < 1e-9)));
     });
@@ -1104,13 +1127,13 @@ programs:
   });
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
 
-  $("sliders").addEventListener("input", (e) => {
+  document.querySelectorAll("[data-sliders]").forEach((box) => box.addEventListener("input", (e) => {
     const k = e.target.dataset.k; if (!k) return;
     const d = sliderDefs().find((x) => x.k === k), v = parseFloat(e.target.value);
     if (d.set) d.set(v); else S[k] = v;
     renderAll();
-  });
-  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; const keep = S.scen; S = cloneS(Object.assign(presetState(PRESETS().find((p) => p.id === b.dataset.preset)), { scen: keep })); renderAll(); });
+  }));
+  document.querySelectorAll("[data-presets]").forEach((box) => box.addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; S = presetState(findPreset(b)); renderAll(); }));
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-sort][data-table]"); if (!b) return;
     const t = b.dataset.table, k = b.dataset.sort;
