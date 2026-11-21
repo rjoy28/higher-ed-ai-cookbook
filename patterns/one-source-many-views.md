@@ -20,4 +20,6 @@
 
 **Third example:** [RCU Program Economics](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-economics/) joins three recipe inputs (enrollment, aid, sections) in one source. The join itself, a subject-to-program map and an allocation rule, sits in the same file as the data. The page reports what failed to join before it reports anything else. Source: [`rcu-economics.yaml`](../test-kitchen/rcu-program-economics/rcu-economics.yaml).
 
+**Fourth example:** [RCU IT Service Health](https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-service-health/) keeps the export exactly as received, with the people's pre-flight decisions next to it. Every check is a switch, so the same source renders the cleaned picture and the as-received one side by side. Source: [`rcu-service-health.yaml`](../test-kitchen/rcu-service-health/rcu-service-health.yaml).
+
 *Status: draft, in the Test Kitchen.*
