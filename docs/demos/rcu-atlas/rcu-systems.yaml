@@ -8,17 +8,31 @@
 #
 # Schema
 #   meta         as_of date, verification threshold, owner of this file
-#   lifecycle    ordered stages of a person's journey; one stage may mark the handoff
-#   systems      what exists: layer, owners, vendor, runs_on (platform underneath)
-#   interfaces   what moves between systems: direction, kind, method, frequency,
-#                owner, criticality, compliance, failure mode, and provenance
-#                (fact_source + last_verified)
+#   lifecycles   one ordered track of stages per kind of person (student, employee);
+#                one stage per track may mark the handoff
+#   systems      what exists: layer, owners, vendor, runs_on (platform underneath),
+#                and signin when people reach it some way other than an sso interface
+#   interfaces   what moves between a pair of systems: kind, method, frequency, owner,
+#                criticality, compliance, failure mode, and provenance
+#                (fact_source + last_verified). One interface per pair.
 #   domains      which system is the record for each kind of data, by lifecycle stage
 #   scenarios    named starting points for the impact radius
 #   observations telemetry snapshots the claims are checked against (drift)
 #
 # Interface kinds: data (records move), sso (sign-in only; blocks people, not feeds)
 # Frequencies:     realtime, hourly, nightly, daily, weekly, monthly, term, annual, on-demand
+# Compliance:      FERPA, GLBA, Title IV, IPEDS. Filterable in every view.
+#
+# Fields (carries) flow from -> to by default. A field written as a mapping can
+# set flow: back (to -> from) or flow: both, and override frequency, method,
+# compliance, fact_source and last_verified for that field only:
+#   carries:
+#     - enrollment
+#     - {field: final grade, flow: back, frequency: term, compliance: [FERPA]}
+#
+# Sign-in (systems.signin): record how people get in when it isn't an sso
+# interface. method: local | self-registration | none. Applications and services
+# with neither an sso interface nor a signin fact show up in the drift report.
 
 meta:
   institution: Riverside Christian University
@@ -28,14 +42,24 @@ meta:
   steward: Office of Data Intelligence
   fixture: true
 
-lifecycle:
-  - {id: prospect,  name: Prospect}
-  - {id: applicant, name: Applicant}
-  - {id: admitted,  name: Admitted}
-  - {id: deposited, name: Deposited, handoff: true}
-  - {id: enrolled,  name: Enrolled}
-  - {id: graduate,  name: Graduate}
-  - {id: alum,      name: Alum}
+lifecycles:
+  - id: student
+    name: Student
+    stages:
+      - {id: prospect,  name: Prospect}
+      - {id: applicant, name: Applicant}
+      - {id: admitted,  name: Admitted}
+      - {id: deposited, name: Deposited, handoff: true}
+      - {id: enrolled,  name: Enrolled}
+      - {id: graduate,  name: Graduate}
+      - {id: alum,      name: Alum}
+  - id: employee
+    name: Employee
+    stages:
+      - {id: candidate, name: Candidate}
+      - {id: hired,     name: Offer accepted, handoff: true}
+      - {id: active,    name: Active}
+      - {id: separated, name: Separated}
 
 # column places each layer left to right in grouped maps, following the data flow.
 layers:
@@ -78,6 +102,21 @@ systems:
     owner: Admissions
     tech_owner: IT Applications
     summary: Online application and application review.
+    signin:
+      method: self-registration
+      note: Applicants create their own accounts. Staff review applications inside Lantern Recruit.
+      fact_source: Platform login settings
+      last_verified: "2026-08-02"
+
+  - id: ats
+    name: Beacon Hire
+    short: Beacon Hire
+    layer: relationship
+    kind: application
+    vendor: Beacon Talent
+    owner: Human Resources
+    tech_owner: IT Applications
+    summary: Job postings, candidates, interviews, and offers.
 
   - id: pay
     name: TrueLane Pay
@@ -88,6 +127,11 @@ systems:
     owner: Business Office
     tech_owner: IT Applications
     summary: Payment gateway for application fees, deposits, and tuition.
+    signin:
+      method: local
+      note: Business Office staff use passwords in the vendor portal. Removed by hand at separation.
+      fact_source: Gateway portal user list
+      last_verified: "2026-07-10"
 
   - id: sis
     name: Cornerstone SIS
@@ -98,6 +142,21 @@ systems:
     owner: Registrar
     tech_owner: IT Applications
     summary: System of record. Registration, academic records, aid, billing, degree audit.
+    signin:
+      method: local
+      note: Staff use separate passwords in the SIS desktop client. Students and faculty come in through MyRCU.
+      fact_source: SIS security user list
+      last_verified: "2026-08-04"
+
+  - id: hr
+    name: Keystone HR and Payroll
+    short: Keystone HR
+    layer: record
+    kind: application
+    vendor: Keystone Workforce
+    owner: Human Resources
+    tech_owner: IT Applications
+    summary: System of record for employees. Positions, supervisors, pay, benefits, separations.
 
   - id: portal
     name: MyRCU portal
@@ -118,7 +177,7 @@ systems:
     vendor: In-house (PowerShell)
     owner: IT Infrastructure
     tech_owner: IT Infrastructure
-    summary: Creates and disables accounts from SIS people data.
+    summary: Creates and disables accounts from SIS student data and HR employee data.
 
   - id: idm
     name: Entra ID + Microsoft 365
@@ -189,6 +248,11 @@ systems:
     owner: Advancement
     tech_owner: IT Applications
     summary: Alumni relations and giving.
+    signin:
+      method: local
+      note: Separate passwords, removed by hand. The spring review found two retired gift officers still active.
+      fact_source: Harvest user list
+      last_verified: "2026-06-15"
 
   - id: fsa
     name: Federal Student Aid (ISIR / COD)
@@ -226,7 +290,10 @@ interfaces:
     from: lantern
     to: sis
     kind: data
-    carries: [person, application decision, deposit]
+    carries:
+      - person
+      - application decision
+      - {field: deposit, compliance: [GLBA]}
     method: Vendor API connector
     frequency: nightly
     trigger: Admitted and deposit paid; nightly sweep catches stragglers
@@ -260,6 +327,7 @@ interfaces:
     frequency: realtime
     owner: Business Office
     criticality: high
+    compliance: [GLBA]
     failure_mode: Deposits go unrecorded, so the handoff to the SIS never fires.
     fact_source: Gateway settlement report
     last_verified: "2025-11-20"
@@ -279,16 +347,16 @@ interfaces:
     last_verified: "2026-10-01"
 
   - id: if-05
-    name: People feed for accounts
+    name: Student feed for accounts
     from: sis
     to: provision
     kind: data
-    carries: [person, role, status]
+    carries: [person, enrollment status]
     method: Flat file (SFTP)
     frequency: nightly
     owner: IT Infrastructure
     criticality: high
-    failure_mode: New students and staff get no accounts; departed people keep access.
+    failure_mode: New students get no accounts; withdrawn students keep access.
     fact_source: Provisioning job log
     last_verified: "2026-10-20"
 
@@ -377,40 +445,39 @@ interfaces:
     last_verified: "2026-06-30"
 
   - id: if-12
-    name: Rosters and enrollments
+    name: Rosters out, final grades back
     from: sis
     to: lms
     kind: data
-    carries: [person, enrollment, section]
+    carries:
+      - person
+      - enrollment
+      - section
+      - field: final grade
+        flow: back
+        method: Grade passback
+        frequency: term
+        fact_source: Registrar grade audit
+        last_verified: "2026-05-20"
     method: Vendor API
     frequency: hourly
     owner: Instructional Technology
     criticality: high
-    failure_mode: Students missing from courses; drops still enrolled.
+    compliance: [FERPA]
+    failure_mode: Students missing from courses or drops still enrolled; grades of record late or wrong on transcripts.
     fact_source: LMS sync log
     last_verified: "2026-09-02"
-
-  - id: if-13
-    name: Final grades
-    from: lms
-    to: sis
-    kind: data
-    carries: [final grade]
-    method: Grade passback
-    frequency: term
-    owner: Registrar
-    criticality: high
-    compliance: [FERPA]
-    failure_mode: Grades of record are late or wrong on transcripts.
-    fact_source: Registrar grade audit
-    last_verified: "2026-05-20"
 
   - id: if-14
     name: Student self-service
     from: sis
     to: portal
     kind: data
-    carries: [schedule, grades, account balance, aid]
+    carries:
+      - schedule
+      - grades
+      - {field: account balance, compliance: [GLBA]}
+      - {field: aid, compliance: [GLBA, Title IV]}
     method: Native module
     frequency: realtime
     owner: Registrar
@@ -430,38 +497,30 @@ interfaces:
     frequency: realtime
     owner: Business Office
     criticality: high
+    compliance: [GLBA]
     failure_mode: Payments don't post; holds and late fees fire in error.
     fact_source: Gateway settlement report
     last_verified: "2026-07-10"
 
   - id: if-16
-    name: ISIR import
+    name: Federal aid exchange (ISIR in, COD out)
     from: fsa
     to: sis
     kind: data
-    carries: [aid eligibility]
+    carries:
+      - aid eligibility
+      - field: disbursement
+        flow: back
+        frequency: weekly
+        fact_source: COD acknowledgment files
+        last_verified: "2026-10-05"
     method: SAIG file transfer
     frequency: daily
     owner: Financial Aid
     criticality: high
-    compliance: [Title IV]
-    failure_mode: Aid packaging stalls; verification deadlines slip.
+    compliance: [Title IV, GLBA]
+    failure_mode: Aid packaging stalls and verification deadlines slip; late disbursement reporting is a program review finding.
     fact_source: SAIG mailbox log
-    last_verified: "2026-10-05"
-
-  - id: if-17
-    name: COD disbursements
-    from: sis
-    to: fsa
-    kind: data
-    carries: [disbursement]
-    method: SAIG file transfer
-    frequency: weekly
-    owner: Financial Aid
-    criticality: high
-    compliance: [Title IV]
-    failure_mode: Disbursement reporting is late, a program review finding.
-    fact_source: COD acknowledgment files
     last_verified: "2026-10-05"
 
   - id: if-18
@@ -499,42 +558,40 @@ interfaces:
     from: sis
     to: hub
     kind: data
-    carries: [enrollment, grades, finance]
+    carries:
+      - enrollment
+      - grades
+      - {field: finance, compliance: [GLBA]}
     method: ETL
     frequency: nightly
     owner: Data Intelligence
     criticality: medium
+    compliance: [FERPA]
     failure_mode: Retention and finance dashboards go stale.
     fact_source: ETL run log
     last_verified: "2026-10-01"
 
   - id: if-21
-    name: Eligible residents
+    name: Eligible residents out, room charges back
     from: sis
     to: housing
     kind: data
-    carries: [person, enrollment status]
+    carries:
+      - person
+      - enrollment status
+      - field: room and board charges
+        flow: back
+        frequency: weekly
+        compliance: [GLBA]
+        fact_source: Business Office charge reconciliation
+        last_verified: "2026-03-01"
     method: Flat file (SFTP)
     frequency: nightly
     owner: Residence Life
-    criticality: medium
-    failure_mode: Eligible students can't select rooms.
+    criticality: high
+    failure_mode: Eligible students can't select rooms; housing charges go missing from student bills.
     fact_source: Housing import log
     last_verified: "2026-08-01"
-
-  - id: if-22
-    name: Room and board charges
-    from: housing
-    to: sis
-    kind: data
-    carries: [charges]
-    method: Flat file (SFTP)
-    frequency: weekly
-    owner: Business Office
-    criticality: high
-    failure_mode: Housing charges missing from student bills.
-    fact_source: Business Office charge reconciliation
-    last_verified: "2026-03-01"
 
   - id: if-23
     name: Active status for ID cards
@@ -574,6 +631,7 @@ interfaces:
     frequency: daily
     owner: Student Success
     criticality: medium
+    compliance: [FERPA]
     failure_mode: Early alerts miss struggling students.
     fact_source: Advising sync log
     last_verified: "2026-09-01"
@@ -619,6 +677,119 @@ interfaces:
     failure_mode: New students can't pre-select rooms before they reach the SIS.
     fact_source: Housing import log
     last_verified: "2025-06-01"
+
+  - id: if-29
+    name: Data Hub sign-in
+    from: idm
+    to: hub
+    kind: sso
+    carries: [sign-in]
+    method: OIDC (native to Power BI)
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: medium
+    failure_mode: Dashboards unreachable.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-30
+    name: Offer accepted handoff
+    from: ats
+    to: hr
+    kind: data
+    carries: [person, position, start date, offer]
+    method: Vendor API
+    frequency: daily
+    trigger: Offer accepted and background check cleared
+    owner: Human Resources
+    criticality: high
+    failure_mode: New hires never reach HR, so no pay, no accounts, no ID card on day one.
+    fact_source: HR import log
+    last_verified: "2026-08-20"
+
+  - id: if-31
+    name: Employee feed for accounts
+    from: hr
+    to: provision
+    kind: data
+    carries: [person, position, department, employment status]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: New hires start without accounts; separated employees keep access.
+    fact_source: Provisioning job log
+    last_verified: "2026-10-20"
+
+  - id: if-32
+    name: Employee status for ID cards
+    from: hr
+    to: onecard
+    kind: data
+    carries: [person, employment status, department]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Campus Safety
+    criticality: high
+    failure_mode: Separated employees keep door access; new hires wait for cards.
+    fact_source: OneCard import log
+    last_verified: "2025-10-02"
+
+  - id: if-33
+    name: Faculty appointments
+    from: hr
+    to: sis
+    kind: data
+    carries: [person, faculty appointment, department]
+    method: Flat file (SFTP)
+    frequency: nightly
+    owner: Registrar
+    criticality: medium
+    failure_mode: New faculty can't be assigned sections, so LMS courses open with no instructor.
+    fact_source: SIS import job log
+    last_verified: "2026-08-25"
+
+  - id: if-34
+    name: Workforce extract
+    from: hr
+    to: hub
+    kind: data
+    carries: [position, department, FTE, salary]
+    method: ETL
+    frequency: nightly
+    owner: Data Intelligence
+    criticality: medium
+    failure_mode: Staffing, budget, and IPEDS HR survey figures go stale.
+    fact_source: ETL run log
+    last_verified: "2026-10-01"
+
+  - id: if-35
+    name: Hiring manager sign-in
+    from: idm
+    to: ats
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: medium
+    failure_mode: Hiring managers can't review candidates. Candidates use their own accounts.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
+
+  - id: if-36
+    name: HR and payroll sign-in
+    from: idm
+    to: hr
+    kind: sso
+    carries: [sign-in]
+    method: SAML
+    frequency: realtime
+    owner: IT Infrastructure
+    criticality: high
+    failure_mode: Employees can't see pay stubs or benefits; HR can't process changes.
+    fact_source: Entra ID enterprise applications
+    last_verified: "2026-06-30"
 
 domains:
   - id: contact
@@ -687,6 +858,53 @@ domains:
     record:
       - {system: advancement, stages: [graduate, alum]}
 
+  # Employee lifecycle. Domains default to the student track unless they name another.
+  - id: emp-candidate
+    lifecycle: employee
+    name: Application and offer
+    record:
+      - {system: ats, stages: [candidate, hired]}
+
+  - id: emp-contact
+    lifecycle: employee
+    name: Name and contact
+    record:
+      - {system: ats, stages: [candidate]}
+      - {system: hr,  stages: [hired, active, separated]}
+
+  - id: emp-position
+    lifecycle: employee
+    name: Position and pay
+    record:
+      - {system: hr, stages: [hired, active, separated]}
+
+  - id: emp-supervisor
+    lifecycle: employee
+    name: Supervisor and department
+    note: The help desk hand-edits the manager field in Entra ID because the employee feed doesn't carry it.
+    record:
+      - {system: hr,  stages: [hired, active]}
+      - {system: idm, stages: [active]}
+
+  - id: emp-teaching
+    lifecycle: employee
+    name: Teaching assignments
+    note: Faculty only.
+    record:
+      - {system: sis, stages: [active]}
+
+  - id: emp-signin
+    lifecycle: employee
+    name: Sign-in account
+    record:
+      - {system: idm, stages: [hired, active]}
+
+  - id: emp-access
+    lifecycle: employee
+    name: ID card and door access
+    record:
+      - {system: onecard, stages: [hired, active]}
+
 scenarios:
   - id: crm-swap
     system: lantern
@@ -700,6 +918,9 @@ scenarios:
   - id: platform-release
     system: sfdc
     name: Salesforce platform release
+  - id: hr-swap
+    system: hr
+    name: Replace the HR system
 
 # Simulated telemetry for the fixture. In production, each block is an export
 # from the named fact source, captured on the stated date.
@@ -712,6 +933,9 @@ observations:
       - {app: MyRCU,             interface: if-08}
       - {app: Commons LMS,       interface: if-09}
       - {app: Roost Housing,     interface: if-11}
+      - {app: Power BI,          interface: if-29}
+      - {app: Beacon Hire,       interface: if-35}
+      - {app: Keystone HR,       interface: if-36}
       - {app: FormFlow Surveys,  interface: null}
       - {app: Huddle Scheduling, interface: null}
 
@@ -732,6 +956,12 @@ observations:
       - {job: sis_advising_sync,     interface: if-25, last_success: "2026-11-08"}
       - {job: lantern_housing_feed,  interface: if-28, last_success: "2025-08-15"}
       - {job: advising_sis_writeback, interface: null, last_success: "2026-11-07", note: Writes advisor assignments back into the SIS}
+      - {job: beacon_keystone_hires,  interface: if-30, last_success: "2026-11-07"}
+      - {job: hr_people_export,       interface: if-31, last_success: "2026-11-08"}
+      - {job: hr_onecard_export,      interface: if-32, last_success: "2026-11-08"}
+      - {job: hr_sis_faculty,         interface: if-33, last_success: "2026-11-08"}
+      - {job: hr_hub_etl,             interface: if-34, last_success: "2026-11-07"}
+      - {job: cod_disbursement_send,  interface: if-16, field: disbursement, last_success: "2026-10-09"}
 
   contracts:
     fact_source: Contract register
@@ -743,3 +973,5 @@ observations:
       - {system: onecard,  owner_of_record: Campus Safety}
       - {system: advising, owner_of_record: Academic Affairs}
       - {system: lms,      owner_of_record: Academic Affairs}
+      - {system: ats,      owner_of_record: Human Resources}
+      - {system: hr,       owner_of_record: Human Resources}
