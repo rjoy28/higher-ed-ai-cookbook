@@ -35,6 +35,12 @@
 #   section flags      under-enrolled below cancel_below; near cap at near_cap fill
 #                      or above; over cap when enrolled > cap (recipe 16)
 #   reconcile          program headcount by level must equal segment headcount, every year
+#   scenario           scenario_discount sets a segment's latest-year discount rate (null
+#                      keeps today's). headcount_response is the share of a segment's
+#                      students lost per point of discount cut (0.01 = 1% per point);
+#                      a negative cut (a higher discount) adds students at the same rate.
+#                      break-even is the headcount loss at which net tuition is unchanged:
+#                      1 - (1 - today's rate) / (1 - scenario rate)
 
 meta:
   institution: Riverside Christian University
@@ -53,6 +59,8 @@ settings:
   cancel_below: 10
   near_cap: 0.90
   load_gap: 0.015
+  scenario_discount: {Undergraduate: null, Graduate: null}
+  headcount_response: 0
 
 segments:
   Undergraduate:

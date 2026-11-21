@@ -176,6 +176,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
   <div class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" id="tab-revenue" aria-controls="revenue" data-view="revenue">Revenue</button>
     <button class="tab" role="tab" id="tab-teaching" aria-controls="teaching" data-view="teaching">Teaching load</button>
+    <button class="tab" role="tab" id="tab-scenario" aria-controls="scenario" data-view="scenario">Discount scenario</button>
     <button class="tab" role="tab" id="tab-source" aria-controls="source" data-view="source">Source</button>
   </div>
 
@@ -240,6 +241,38 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
     </div>
   </section>
 
+  <section class="panel" role="tabpanel" id="scenario" aria-labelledby="tab-scenario" hidden>
+    <div class="settings" role="group" aria-labelledby="scen-title" style="margin-top:0">
+      <div class="settings-head">
+        <h2 id="scen-title" style="font-size:1.15rem">Scenario</h2>
+        <div class="group" role="group" aria-labelledby="scen-preset-label"><span class="lbl" id="scen-preset-label">Try</span><span id="scen-presets" class="group"></span></div>
+      </div>
+      <p class="settings-note">Set a discount rate for the latest year and say how many students you expect to lose for each point it drops. The break-even line needs no guess: it is how many students could leave before the change costs money.</p>
+      <div class="sliders" id="scen-sliders"></div>
+    </div>
+    <p class="narrative" id="scen-narrative" aria-live="polite"></p>
+    <p class="narrative" id="scen-narrative2"></p>
+    <div class="stats" id="scen-stats"></div>
+
+    <div class="figure">
+      <h3>Net tuition change as undergraduates leave</h3>
+      <p class="cap">The change in total net tuition at the scenario rates, for each share of undergraduates lost. Left of the break-even line, the scenario brings in more than today. The marker shows your enrollment-response setting.</p>
+      <div class="svgbox" id="scen-curve"></div>
+      <div class="legend" id="scen-legend"></div>
+    </div>
+
+    <div class="section-head">
+      <h2>Programs under the scenario</h2>
+      <p>Each program keeps its share of its segment, so the order changes only when one segment moves more than the other. The twelve largest by scenario net tuition.</p>
+    </div>
+    <div class="tablebox"><table id="scen-table"></table></div>
+
+    <div class="callout">
+      <p><strong>What this model leaves out.</strong> It applies the new rate to every student in the latest year at once. Real discount changes reach new students first and take four years to reach everyone, while current students keep their awards. It also treats students who leave as average students, when the ones who leave are often the most price-sensitive and the most aided.</p>
+      <p>The enrollment response is a setting, not a forecast. Use your own yield history, or test a range. The break-even line is the one number here that needs no guess.</p>
+    </div>
+  </section>
+
   <section class="panel" role="tabpanel" id="source" aria-labelledby="tab-source" hidden>
     <div class="section-head">
       <h2>The source</h2>
@@ -258,7 +291,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
         <dt>programs</dt><dd>Recipe 01's input. Each program's level must name a segment, and program headcounts must add up to the segment's, every year.</dd>
         <dt>sections</dt><dd>Recipe 16's section export for the term.</dd>
         <dt>subjects</dt><dd>The join. Each course prefix names the program it belongs to, or null for a course that serves several programs. Add a note when a mapping needs explaining.</dd>
-        <dt>settings</dt><dd>The rules. The sliders start here, and Recipe defaults returns to these values.</dd>
+        <dt>settings</dt><dd>The rules and the scenario. The sliders start here, and Recipe defaults returns to these values. scenario_discount null keeps today's rate.</dd>
       </dl>
     </div>
   </section>
@@ -307,6 +340,12 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
 #   section flags      under-enrolled below cancel_below; near cap at near_cap fill
 #                      or above; over cap when enrolled > cap (recipe 16)
 #   reconcile          program headcount by level must equal segment headcount, every year
+#   scenario           scenario_discount sets a segment's latest-year discount rate (null
+#                      keeps today's). headcount_response is the share of a segment's
+#                      students lost per point of discount cut (0.01 = 1% per point);
+#                      a negative cut (a higher discount) adds students at the same rate.
+#                      break-even is the headcount loss at which net tuition is unchanged:
+#                      1 - (1 - today's rate) / (1 - scenario rate)
 
 meta:
   institution: Riverside Christian University
@@ -325,6 +364,8 @@ settings:
   cancel_below: 10
   near_cap: 0.90
   load_gap: 0.015
+  scenario_discount: {Undergraduate: null, Graduate: null}
+  headcount_response: 0
 
 segments:
   Undergraduate:
@@ -574,7 +615,15 @@ programs:
     Object.keys(segments).forEach((k) => {
       if (online[k] != null && online[k] > M.onlineMax[k] + 1e-9) throw new Error("settings.online_discount." + k + " is " + pct(online[k], 1) + ", but campus aid would drop below zero. The highest rate that still adds up is " + pct(M.onlineMax[k], 1) + ".");
     });
-    M.defaults = { online, discount_goal: st.discount_goal, approaching_band: st.approaching_band, cancel_below: st.cancel_below, near_cap: st.near_cap, load_gap: st.load_gap };
+    const disc = {};
+    Object.keys(segments).forEach((k) => {
+      const v = (st.scenario_discount || {})[k];
+      if (v != null && (typeof v !== "number" || v < 0 || v >= 1)) throw new Error("settings.scenario_discount." + k + " must be null or a rate from 0 up to (not including) 1, such as 0.58.");
+      disc[k] = typeof v === "number" ? v : null;
+    });
+    const resp = st.headcount_response ?? 0;
+    if (typeof resp !== "number" || resp < 0 || resp > 0.1) throw new Error("settings.headcount_response must be a number from 0 to 0.1 (0.01 = 1% of students per point).");
+    M.defaults = { online, discount_goal: st.discount_goal, approaching_band: st.approaching_band, cancel_below: st.cancel_below, near_cap: st.near_cap, load_gap: st.load_gap, scen: { disc, resp } };
     return M;
   }
 
@@ -664,7 +713,7 @@ programs:
   ];
   const presetState = (p) => Object.assign({}, M.defaults, p.set, { online: Object.assign({}, M.defaults.online, p.set.online || {}) });
   const same = (a, b) => NUM_KEYS.every((k) => Math.abs(a[k] - b[k]) < 1e-9) && Object.keys(M.segments).every((k) => (a.online[k] == null && b.online[k] == null) || (a.online[k] != null && b.online[k] != null && Math.abs(a.online[k] - b.online[k]) < 1e-9));
-  const cloneS = (x) => Object.assign({}, x, { online: Object.assign({}, x.online) });
+  const cloneS = (x) => Object.assign({}, x, { online: Object.assign({}, x.online), scen: { disc: Object.assign({}, x.scen.disc), resp: x.scen.resp } });
 
   // ---- Helpers ---------------------------------------------------------
   const stat = (n, k, cls) => '<div class="stat ' + (cls || "") + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>";
@@ -916,14 +965,133 @@ programs:
     $("load-table").innerHTML = h + "</tbody>";
   }
 
+  // ---- Discount scenario -------------------------------------------------
+  const todayRate = (k) => lastDisc(k);
+  const scenRate = (k) => (S.scen.disc[k] == null ? todayRate(k) : S.scen.disc[k]);
+  // Rate for the first segment that hits a blended goal, holding the others at their scenario rates.
+  function rateForGoal(goal) {
+    const i = M.years.length - 1, keys = Object.keys(M.segments), ugK = keys.find(isUG) || keys[0];
+    const G = keys.reduce((s, k) => s + M.segments[k].gross[i], 0);
+    const other = keys.filter((k) => k !== ugK).reduce((s, k) => s + M.segments[k].gross[i] * scenRate(k), 0);
+    return Math.min(0.99, Math.max(0, (goal * G - other) / M.segments[ugK].gross[i]));
+  }
+  const scenDefs = () => [
+    ...Object.keys(M.segments).map((k) => ({ k: "disc:" + k, label: (isUG(k) ? "Undergraduate" : k) + " discount rate", min: 0.3, max: 0.75, step: 0.0025,
+      get: () => S.scen.disc[k], set: (v) => (S.scen.disc[k] = Math.abs(v - todayRate(k)) < 0.00125 ? null : v), def: () => M.defaults.scen.disc[k],
+      fmt: (v) => (v == null ? "Today (" + pct(todayRate(k), 1) + ")" : pct(v, 2).replace(/0%$/, "%")), valueOf: (v) => (v == null ? todayRate(k) : v), minFor: () => (isUG(k) ? 0.3 : 0), maxFor: () => (isUG(k) ? 0.75 : 0.4) })),
+    { k: "resp", label: "Students lost per point cut", min: 0, max: 0.03, step: 0.001, get: () => S.scen.resp, set: (v) => (S.scen.resp = v), def: () => M.defaults.scen.resp,
+      fmt: (v) => (v ? (v * 100).toFixed(1) + "% of the segment" : "None (headcount held)") },
+  ];
+  const SCEN_PRESETS = () => [
+    { id: "today", label: "Today", apply: () => { Object.keys(M.segments).forEach((k) => (S.scen.disc[k] = null)); S.scen.resp = 0; } },
+    { id: "goal", label: "Blended rate at the goal", apply: () => { Object.keys(M.segments).forEach((k) => (S.scen.disc[k] = null)); const k = Object.keys(M.segments).find(isUG); S.scen.disc[k] = Math.round(rateForGoal(S.discount_goal) * 10000) / 10000; } },
+    { id: "ug-goal", label: "Undergraduate rate at the goal", apply: () => { const k = Object.keys(M.segments).find(isUG); S.scen.disc[k] = S.discount_goal; } },
+    { id: "respond", label: "Students respond (1% per point)", apply: () => { S.scen.resp = 0.01; } },
+  ];
+  function renderScenSliders() {
+    $("scen-sliders").innerHTML = scenDefs().map((s) => {
+      const mn = s.minFor ? s.minFor() : s.min, mx = s.maxFor ? s.maxFor() : s.max;
+      return '<div class="slider"><label for="s-' + s.k + '"><span>' + esc(s.label) + '</span><output id="o-' + s.k + '" for="s-' + s.k + '"></output></label>' +
+        '<input type="range" id="s-' + s.k + '" data-k="' + s.k + '" min="' + mn + '" max="' + mx + '" step="' + s.step + '"></div>';
+    }).join("");
+    $("scen-presets").innerHTML = SCEN_PRESETS().map((p) => '<button type="button" class="chipbtn" data-scen="' + p.id + '">' + esc(p.label) + "</button>").join("");
+  }
+  function syncScen() {
+    scenDefs().forEach((s) => {
+      const el = $("s-" + s.k), o = $("o-" + s.k); if (!el) return;
+      const v = s.get(), shown = s.valueOf ? s.valueOf(v) : v;
+      el.value = shown; const txt = s.fmt(v); el.setAttribute("aria-valuetext", txt); o.textContent = txt;
+      const d = s.def(); o.classList.toggle("changed", !((v == null && d == null) || (v != null && d != null && Math.abs(v - d) < 1e-9)));
+    });
+  }
+
+  function scenarioModel(E, lossOverride) {
+    const last = E.last, out = {};
+    Object.keys(M.segments).forEach((k) => {
+      const t = E.seg[k][last], d0 = t.disc, d1 = scenRate(k), cut = (d0 - d1) * 100;
+      let loss = lossOverride != null && isUG(k) ? lossOverride : S.scen.resp * cut;
+      loss = Math.max(-0.5, Math.min(0.95, loss));
+      const hc = t.hc * (1 - loss), gross = t.gross * (1 - loss), aid = gross * d1;
+      out[k] = { d0, d1, cut, loss, hc, gross, aid, net: gross - aid, net0: t.net, hc0: t.hc, gross0: t.gross, aid0: t.aid,
+        breakEven: d1 < d0 ? 1 - (1 - d0) / (1 - d1) : null, factor: t.net ? (gross - aid) / t.net : 1 };
+    });
+    const sum = (f) => Object.values(out).reduce((s, x) => s + x[f], 0);
+    return { seg: out, net: sum("net"), net0: sum("net0"), hc: sum("hc"), hc0: sum("hc0"), gross: sum("gross"), aid: sum("aid"), gross0: sum("gross0"), aid0: sum("aid0") };
+  }
+
+  function renderScenario(E) {
+    const X = scenarioModel(E), keys = Object.keys(M.segments), ugK = keys.find(isUG);
+    const u = X.seg[ugK], blend0 = X.aid0 / X.gross0, blend1 = X.gross ? X.aid / X.gross : 0;
+    const dNet = X.net - X.net0, changed = keys.some((k) => Math.abs(X.seg[k].d1 - X.seg[k].d0) > 1e-9);
+    const goalRate = rateForGoal(S.discount_goal);
+    let s;
+    if (!changed) s = "Today the blended discount is <strong>" + pct(blend0, 1) + "</strong> against a " + pct(S.discount_goal, 0) + " goal. The goal is a blended rate, so it does not ask undergraduates to reach " + pct(S.discount_goal, 0) + ": with graduate aid unchanged, the undergraduate rate would have to fall from " + pct(u.d0, 1) + " to <strong>" + pct(goalRate, 1) + "</strong>. Move a slider or try a scenario.";
+    else {
+      s = "At these rates the blended discount is <strong>" + pct(blend1, 1) + "</strong>" + (blend1 <= S.discount_goal + 0.0005 ? ", at or under the " + pct(S.discount_goal, 0) + " goal" : ", against a " + pct(S.discount_goal, 0) + " goal") + ". ";
+      s += S.scen.resp ? "With " + (S.scen.resp * 100).toFixed(1) + "% of students lost per point cut, " + keys.filter((k) => Math.abs(X.seg[k].cut) > 1e-9).map((k) => (isUG(k) ? "undergraduate" : "graduate") + " headcount " + (X.seg[k].loss >= 0 ? "falls by " + int(X.seg[k].hc0 - X.seg[k].hc) : "rises by " + int(X.seg[k].hc - X.seg[k].hc0))).join(" and ") + ", and net tuition " : "With headcount held, net tuition ";
+      s += (dNet >= 0 ? "rises by <strong>" : "falls by <strong>") + big(Math.abs(dNet)) + "</strong> a year.";
+    }
+    $("scen-narrative").innerHTML = s;
+    let s2 = "";
+    if (u.breakEven != null) s2 = "The cut stays ahead unless more than <strong>" + pct(u.breakEven, 1) + " of undergraduates (" + int(u.hc0 * u.breakEven) + " students)</strong> leave. That number comes from the rates alone: each remaining undergraduate brings in " + money((u.gross0 / u.hc0) * (1 - u.d1)) + " instead of " + money((u.gross0 / u.hc0) * (1 - u.d0)) + ".";
+    else if (u.d1 > u.d0 + 1e-9) s2 = "Raising the undergraduate discount pays only if it brings in more students: at least <strong>" + pct((1 - u.d0) / (1 - u.d1) - 1, 1) + " more undergraduates (" + int(u.hc0 * ((1 - u.d0) / (1 - u.d1) - 1)) + ")</strong> to break even.";
+    $("scen-narrative2").innerHTML = s2; $("scen-narrative2").hidden = !s2;
+
+    $("scen-stats").innerHTML = stat(pct(blend1, 1), "Blended discount; today " + pct(blend0, 1), blend1 <= S.discount_goal + 0.0005 ? "ok" : blend1 <= M.defaults.approaching_band ? "warn" : "crit") +
+      stat(big(X.net), "Net tuition; today " + big(X.net0)) + stat(signedMoney(dNet), "Change per year", dNet > 0 ? "ok" : dNet < 0 ? "crit" : "") +
+      stat(u.breakEven == null ? "—" : pct(u.breakEven, 1), "Undergraduates who could leave before it costs money") + stat(int(X.hc), "Students; today " + int(X.hc0));
+
+    $("scen-curve").innerHTML = curveSVG(E, X);
+    $("scen-legend").innerHTML = '<span><svg width="26" height="10" aria-hidden="true"><line x1="0" x2="26" y1="5" y2="5" style="stroke:var(--accent);stroke-width:2.4"/></svg>Change in net tuition</span>' +
+      '<span><svg width="14" height="18" aria-hidden="true"><line x1="7" x2="7" y1="0" y2="18" class="bandline"/></svg>Break-even</span>' +
+      '<span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle r="5.5" style="fill:var(--ink)"/></svg>Your response setting</span>';
+
+    // Programs: each keeps its share of its segment.
+    const rows = E.rows.map((r) => Object.assign({}, r, { scen: r.netNow * X.seg[r.level].factor }));
+    const order = rows.slice().sort((a, b) => b.scen - a.scen); order.forEach((r, i) => (r.scenRank = i + 1));
+    $("scen-table").innerHTML = "<caption class='sr'>The twelve programs with the most net tuition under the scenario, with today's figures</caption><thead><tr><th scope='col'>Program</th><th scope='col' class='num'>Today</th><th scope='col' class='num'>Scenario</th><th scope='col' class='num'>Change</th><th scope='col' class='num'>Rank today → scenario</th></tr></thead><tbody>" +
+      order.slice(0, 12).map((r) => { const mv = r.netNowRank - r.scenRank; return "<tr>" + progCell(Object.assign({}, r, { note: "" })) + '<td class="num">' + money(r.netNow) + '</td><td class="num"><strong>' + money(r.scen) + '</strong></td><td class="num">' + signedMoney(r.scen - r.netNow) + '</td><td class="num">' + r.netNowRank + " → " + r.scenRank + '<span class="move ' + (mv > 0 ? "up" : mv < 0 ? "down" : "same") + '">' + (mv > 0 ? "▲ up " + mv : mv < 0 ? "▼ down " + -mv : "no change") + "</span></td></tr>"; }).join("") + "</tbody>";
+  }
+
+  function curveSVG(E, X) {
+    const ugK = Object.keys(M.segments).find(isUG), u = X.seg[ugK];
+    const W = 940, H = 340, L = 104, R = 24, T = 24, B = 52;
+    const xMax = Math.max(0.3, (u.breakEven || 0) * 1.35, Math.max(0, u.loss) * 1.2);
+    const pts = []; for (let i = 0; i <= 60; i++) { const l = (xMax * i) / 60; pts.push([l, scenarioModel(E, l).net - X.net0]); }
+    const ys = pts.map((p) => p[1]).concat([0]); let lo = Math.min(...ys), hi = Math.max(...ys);
+    const pad = (hi - lo || 1e6) * 0.1; lo -= pad; hi += pad;
+    const step = (hi - lo) > 8e6 ? 2e6 : (hi - lo) > 4e6 ? 1e6 : 5e5;
+    const Xs = (v) => L + (v / xMax) * (W - L - R), Ys = (v) => T + ((hi - v) / (hi - lo)) * (H - T - B);
+    let g = "";
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + Ys(v).toFixed(1) + '" y2="' + Ys(v).toFixed(1) + '"/><text class="tick" x="' + (L - 8) + '" y="' + (Ys(v) + 4).toFixed(1) + '" text-anchor="end">' + signedMoney(v).replace("+$0", "$0") + "</text>";
+    const xs = xMax > 0.4 ? 0.1 : 0.05;
+    for (let v = 0; v <= xMax + 1e-9; v += xs) g += '<text class="tick" x="' + Xs(v).toFixed(1) + '" y="' + (H - B + 18) + '" text-anchor="middle">' + pct(v, 0) + "</text>";
+    g += '<line class="zero" style="stroke:var(--muted);stroke-width:1.2" x1="' + L + '" x2="' + (W - R) + '" y1="' + Ys(0).toFixed(1) + '" y2="' + Ys(0).toFixed(1) + '"/>';
+    g += '<path d="' + pts.map((p, i) => (i ? "L" : "M") + Xs(p[0]).toFixed(1) + "," + Ys(p[1]).toFixed(1)).join(" ") + '" style="fill:none;stroke:var(--accent);stroke-width:2.6"/>';
+    if (u.breakEven != null && u.breakEven <= xMax) {
+      g += '<line class="bandline" x1="' + Xs(u.breakEven).toFixed(1) + '" x2="' + Xs(u.breakEven).toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '"/>';
+      g += '<text class="reflabel" x="' + (Xs(u.breakEven) + 6).toFixed(1) + '" y="' + (T + 12) + '">Break-even ' + pct(u.breakEven, 1) + "</text>";
+    }
+    if (u.loss > 0) {
+      const cy = Ys(X.net - X.net0);
+      g += '<circle cx="' + Xs(u.loss).toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="6" style="fill:var(--ink);stroke:var(--surface);stroke-width:2"/><text class="plabel" x="' + (Xs(u.loss) + 10).toFixed(1) + '" y="' + (cy - 8).toFixed(1) + '">' + pct(u.loss, 1) + " lost: " + signedMoney(X.net - X.net0) + "</text>";
+    }
+    g += '<text class="axistitle" x="' + (L + (W - L - R) / 2) + '" y="' + (H - 10) + '" text-anchor="middle">Share of undergraduates who leave</text>';
+    g += '<text class="axistitle" transform="translate(16 ' + (T + (H - T - B) / 2) + ') rotate(-90)" text-anchor="middle">Change in net tuition per year</text>';
+    const label = "Line chart of the change in net tuition as undergraduates leave, at an undergraduate discount of " + pct(u.d1, 1) + ". It starts at " + signedMoney(pts[0][1]) + " with no students lost" + (u.breakEven != null ? " and crosses zero at " + pct(u.breakEven, 1) + " lost." : ".");
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+  $("scen-sliders").addEventListener("input", (e) => { const k = e.target.dataset.k; if (!k) return; scenDefs().find((x) => x.k === k).set(parseFloat(e.target.value)); renderAll(); });
+  $("scen-presets").addEventListener("click", (e) => { const b = e.target.closest("[data-scen]"); if (!b) return; SCEN_PRESETS().find((p) => p.id === b.dataset.scen).apply(); renderAll(); });
+
   // ---- Meta, tabs, source ---------------------------------------------
   function renderMeta(E) {
     $("meta").innerHTML = [["As of", M.meta.as_of], ["Programs", M.programs.length], ["Students, " + M.years[E.last], int(E.totHC)], ["Sections", M.sections.length + " (" + (M.meta.term || "") + ")"], ["Reconciles", E.recon.length ? "No, see Teaching load" : "Yes"], ["Steward", M.meta.steward], ["Source", "rcu-economics.yaml"]]
       .filter(([, v]) => v != null && v !== "").map(([k, v]) => "<span>" + esc(k) + " <b>" + esc(v) + "</b></span>").join("");
   }
-  function renderAll() { syncControls(); const E = evaluate(M, S); renderMeta(E); renderRevenue(E); renderTeaching(E); }
+  function renderAll() { syncControls(); syncScen(); const E = evaluate(M, S); renderMeta(E); renderRevenue(E); renderTeaching(E); renderScenario(E); }
 
-  const TABS = ["revenue", "teaching", "source"];
+  const TABS = ["revenue", "teaching", "scenario", "source"];
   function show(view, focus) {
     if (!TABS.includes(view)) view = "revenue";
     TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
@@ -942,7 +1110,7 @@ programs:
     if (d.set) d.set(v); else S[k] = v;
     renderAll();
   });
-  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; S = cloneS(presetState(PRESETS().find((p) => p.id === b.dataset.preset))); renderAll(); });
+  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; const keep = S.scen; S = cloneS(Object.assign(presetState(PRESETS().find((p) => p.id === b.dataset.preset)), { scen: keep })); renderAll(); });
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-sort][data-table]"); if (!b) return;
     const t = b.dataset.table, k = b.dataset.sort;
@@ -953,10 +1121,10 @@ programs:
 
   const status = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
   $("apply").addEventListener("click", () => {
-    try { const next = build($("yaml-src").value); M = next; S = cloneS(M.defaults); renderSliders(); renderAll(); status("Applied. " + M.programs.length + " programs, " + M.sections.length + " sections. Every view now reflects your edits, and the rules reset to the file's settings.", "ok"); }
+    try { const next = build($("yaml-src").value); M = next; S = cloneS(M.defaults); renderSliders(); renderScenSliders(); renderAll(); status("Applied. " + M.programs.length + " programs, " + M.sections.length + " sections. Every view now reflects your edits, and the rules reset to the file's settings.", "ok"); }
     catch (err) { status("Not applied. " + err.message, "err"); }
   });
-  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; M = build(ORIGINAL); S = cloneS(M.defaults); renderSliders(); renderAll(); status("Reset to the original source.", "ok"); });
+  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; M = build(ORIGINAL); S = cloneS(M.defaults); renderSliders(); renderScenSliders(); renderAll(); status("Reset to the original source.", "ok"); });
   $("copy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("yaml-src").value); status("Copied to the clipboard.", "ok"); }
     catch { $("yaml-src").select(); status("Select all and copy with your keyboard; this browser blocked clipboard access.", ""); }
@@ -964,7 +1132,7 @@ programs:
 
   // ---- Boot ------------------------------------------------------------
   $("yaml-src").value = ORIGINAL;
-  try { M = build(ORIGINAL); S = cloneS(M.defaults); renderSliders(); renderAll(); }
+  try { M = build(ORIGINAL); S = cloneS(M.defaults); renderSliders(); renderScenSliders(); renderAll(); }
   catch (err) { $("rev-narrative").textContent = err.message; }
   show(location.hash.slice(1) || "revenue");
 })();
