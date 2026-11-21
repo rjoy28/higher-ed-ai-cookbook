@@ -1,0 +1,949 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RCU IT Service Health</title>
+<meta name="description" content="Six months of help-desk tickets at a fictional university: which services meet their SLA, where the gap sits, and how much the answer depends on checking the export first. A Higher Ed AI Cookbook fixture.">
+<meta property="og:title" content="RCU IT Service Health">
+<meta property="og:description" content="Which services meet their SLA, where the gap sits, and how much the answer changes when you check the export before you score it.">
+<meta property="og:image" content="https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-service-health/preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Same visual system as the RCU Systems Atlas and Portfolio Explorer, so the demos read as one set. */
+:root {
+  --bg: #f4f7f8; --surface: #ffffff; --ink: #14212b; --muted: #475763; --line: #d2dbe0; --accent: #0d6670;
+  --grad: #1f5fa8; --ug: #8a4b0f;
+  --crit: #b42318; --warn: #8f5400; --ok: #1d7a3a; --band: rgba(13,102,112,.09);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e1418; --surface: #162027; --ink: #e5edf1; --muted: #a2b1ba; --line: #2b3a44; --accent: #5cc3cc;
+  --grad: #84b4ee; --ug: #e4a76a;
+  --crit: #ff8b7b; --warn: #f2b84b; --ok: #72d38f; --band: rgba(92,195,204,.12); color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 1rem; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); font-stretch: 85%; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.lede { color: var(--muted); max-width: 72ch; margin-top: 8px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 0.88rem; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 22px; border-bottom: 2px solid var(--line); }
+.tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 0.98rem var(--f-body); padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px; cursor: pointer; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+:is(.tab, button, input, textarea, a):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.panel { padding-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+
+.settings { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 14px; margin-top: 22px; }
+.settings-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.settings-note { font-size: 0.88rem; color: var(--muted); max-width: 90ch; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; }
+.slider { display: grid; gap: 2px; }
+.slider label { font-size: 0.86rem; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.slider output { font-family: var(--f-mono); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.slider output.changed { color: var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group > .lbl { font-size: 0.86rem; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.chipbtn { font: 600 0.88rem var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+.chipbtn:hover { border-color: var(--accent); }
+.chipbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn { font: 600 0.92rem var(--f-body); border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+
+.narrative { font-size: 1.12rem; max-width: 76ch; }
+.narrative + .narrative { margin-top: -10px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stat { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.stat .n { font-family: var(--f-display); font-stretch: 85%; font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-size: 0.84rem; color: var(--muted); }
+.stat.ok .n { color: var(--ok); } .stat.warn .n { color: var(--warn); } .stat.crit .n { color: var(--crit); }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.figure h3 { margin: 4px 4px 2px; }
+.figure .cap { color: var(--muted); font-size: 0.9rem; margin: 0 4px 6px; max-width: 80ch; }
+.svgbox { overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.tick { font: 12px var(--f-mono); fill: var(--muted); }
+.grid { stroke: var(--line); stroke-width: 1; }
+.axistitle { font: 600 12.5px var(--f-body); fill: var(--muted); }
+.bandrect { fill: var(--band); }
+.bandline { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.diag { stroke: var(--accent); stroke-width: 1.5; }
+.reflabel { font: 600 11.5px var(--f-mono); fill: var(--accent); }
+.pt { stroke: var(--surface); stroke-width: 1.5; }
+.pt.ug { fill: var(--ug); } .pt.grad { fill: var(--grad); }
+.pt.hollow { fill: var(--surface); stroke-width: 2; } .pt.hollow.ug { stroke: var(--ug); } .pt.hollow.grad { stroke: var(--grad); }
+.plabel { font: 600 11.5px var(--f-body); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.slope.ug { stroke: var(--ug); } .slope.grad { stroke: var(--grad); }
+.slope { stroke-width: 2; fill: none; opacity: .85; }
+.slope.dim { opacity: .3; }
+.rowlabel { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.rowlabel.dim { fill: var(--muted); font-weight: 400; }
+.colhead { font: 700 11.5px var(--f-mono); letter-spacing: .06em; fill: var(--muted); text-transform: uppercase; }
+.line-net { fill: none; stroke-width: 2.4; } .line-sticker { fill: none; stroke-width: 2; stroke-dasharray: 6 4; }
+.line-net.ug, .line-sticker.ug { stroke: var(--ug); } .line-net.grad, .line-sticker.grad { stroke: var(--grad); }
+.dot.ug { fill: var(--ug); } .dot.grad { fill: var(--grad); }
+.vlabel { font: 600 11.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { flex: none; }
+
+.section-head { display: grid; gap: 4px; }
+.section-head p { color: var(--muted); max-width: 76ch; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg); white-space: nowrap; }
+tbody th { font-weight: 600; color: var(--ink); background: none; min-width: 220px; }
+th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+th[aria-sort] button::after { content: "↕"; opacity: .45; }
+th[aria-sort="ascending"] button::after { content: "↑"; opacity: 1; }
+th[aria-sort="descending"] button::after { content: "↓"; opacity: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num { white-space: nowrap; }
+tr:last-child > * { border-bottom: 0; }
+.sub { color: var(--muted); font-size: 0.86rem; font-weight: 400; display: block; }
+.note { color: var(--ink); font-size: 0.84rem; font-weight: 400; display: block; font-style: italic; max-width: 46ch; margin-top: 0.35rem; line-height: 1.4; }
+.move { display: block; font-size: 0.84rem; font-weight: 600; }
+.move.up { color: var(--ok); } .move.down { color: var(--crit); } .move.same { color: var(--muted); font-weight: 400; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1.5px solid currentColor; white-space: nowrap; }
+.pill.ok { color: var(--ok); } .pill.crit { color: var(--crit); } .pill.warn { color: var(--warn); } .pill.muted { color: var(--muted); } .pill.tag { color: var(--accent); }
+.lvl { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+.lvl.ug { background: var(--ug); } .lvl.grad { background: var(--grad); border-radius: 50%; }
+
+.findings { display: grid; gap: 8px; }
+.finding { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.finding .stripe { background: var(--accent); }
+.finding.warn .stripe { background: var(--warn); }
+.finding .body { padding: 10px 14px; display: grid; gap: 4px; }
+.finding .top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.finding .why { color: var(--ink); font-size: 0.92rem; max-width: 80ch; }
+.empty { color: var(--muted); padding: 12px 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 82ch; }
+.callout p + p { margin-top: 6px; }
+.two-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.two-fig .svgbox svg { min-width: 420px; }
+
+textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; tab-size: 2; resize: vertical; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.status { font-size: 0.92rem; color: var(--muted); min-height: 1.5em; }
+.status.err { color: var(--crit); font-weight: 600; white-space: pre-wrap; }
+.status.ok { color: var(--ok); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px; align-items: start; }
+.schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
+.schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+.schema dd { margin: 0 0 6px; color: var(--muted); }
+details.drawer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+details.drawer[open] { padding-bottom: 16px; }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 0; min-height: 44px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: "▸"; color: var(--accent); width: 1ch; }
+details.drawer[open] > summary::before { content: "▾"; }
+details.drawer > summary h2 { display: inline; font-size: 1.2rem; }
+details.drawer > summary .sub { color: var(--muted); font-size: 0.92rem; }
+details.drawer > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+details.drawer > .drawer-body { display: grid; gap: 14px; padding-top: 6px; }
+.behind { margin-top: 48px; padding-top: 22px; border-top: 2px solid var(--line); display: grid; gap: 14px; }
+.behind .callout p + p { margin-top: 6px; }
+footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
+@media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+/* Service Health additions */
+tr.changed > :first-child { box-shadow: inset 4px 0 var(--accent); }
+.bar.ok { fill: var(--ok); } .bar.warn { fill: var(--warn); } .bar.crit { fill: var(--crit); }
+.bar.vol { fill: var(--accent); opacity: .85; }
+.zone.crit { fill: var(--crit); opacity: .07; } .zone.warn { fill: var(--warn); opacity: .09; } .zone.ok { fill: var(--ok); opacity: .07; }
+.zonelabel { font: 600 11px var(--f-mono); letter-spacing: .04em; text-transform: uppercase; }
+.zonelabel.crit { fill: var(--crit); } .zonelabel.warn { fill: var(--warn); } .zonelabel.ok { fill: var(--ok); }
+.attline { fill: none; stroke: var(--ink); stroke-width: 2.4; }
+.attdot { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.checks { display: grid; gap: 10px; }
+.check { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.check .stripe { background: var(--accent); }
+.check.off .stripe { background: var(--line); }
+.check .body { padding: 12px 14px; display: grid; gap: 6px; }
+.check .top { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: space-between; }
+.check .top strong { font-size: 1rem; }
+.check p { font-size: 0.92rem; max-width: 82ch; }
+.check .found { color: var(--ink); }
+.check .handled { color: var(--muted); }
+.check .rows { font-family: var(--f-mono); font-size: 0.82rem; color: var(--muted); }
+.switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; min-height: 32px; }
+.switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+.status-cell { white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Test Kitchen · Higher Ed AI Cookbook</p>
+    <h1>RCU IT Service Health</h1>
+    <p class="lede">Six months of help-desk tickets at Riverside Christian University: which services meet their service-level targets, where the gap sits, and how much the answer depends on checking the export before scoring it.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-health" aria-controls="health" data-view="health">Service health</button>
+    <button class="tab" role="tab" id="tab-cuts" aria-controls="cuts" data-view="cuts">Priority and team</button>
+    <button class="tab" role="tab" id="tab-trend" aria-controls="trend" data-view="trend">Monthly trend</button>
+    <button class="tab" role="tab" id="tab-preflight" aria-controls="preflight" data-view="preflight">Pre-flight check</button>
+  </div>
+
+  <section class="panel" role="tabpanel" id="health" aria-labelledby="tab-health">
+    <div class="settings" role="group" aria-labelledby="bands-title" style="margin-top:0">
+      <div class="settings-head">
+        <h2 id="bands-title" style="font-size:1.15rem">Service-level bands</h2>
+        <div class="group" role="group" aria-labelledby="preset-label"><span class="lbl" id="preset-label">Try</span><span id="presets" class="group"></span></div>
+      </div>
+      <p class="settings-note">A service is on target when this share of its tickets is resolved within the SLA, and on watch above the second line. The bands are a choice, not a fact about the tickets: move them and watch which services change color.</p>
+      <div class="sliders" id="sliders"></div>
+    </div>
+    <p class="narrative" id="health-narrative" aria-live="polite"></p>
+    <div class="stats" id="health-stats"></div>
+    <div class="figure">
+      <h3>SLA attainment by service category</h3>
+      <p class="cap">Share of each category's tickets resolved within their SLA target, lowest first. Shading marks the bands.</p>
+      <div class="svgbox" id="cat-chart"></div>
+    </div>
+    <div class="section-head">
+      <h2>Every category</h2>
+      <p>Select a column heading to sort. "Short of target" is how many more tickets would have had to close inside their SLA for the category to reach the on-target line.</p>
+    </div>
+    <div class="tablebox"><table id="cat-table"></table></div>
+    <div class="callout"><p><strong>Read with care.</strong> Attainment shows where to look, not why. A low category can mean a staffing gap, a vendor, a misrouted queue, or an SLA set too tight for the work.</p></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="cuts" aria-labelledby="tab-cuts" hidden>
+    <p class="narrative" id="cuts-narrative" aria-live="polite"></p>
+    <div class="two-fig">
+      <div class="figure"><h3>By priority</h3><p class="cap">P1 is the most urgent. Targets run from 4 hours (P1) to 72 hours (P4).</p><div class="svgbox" id="pri-chart"></div></div>
+      <div class="figure"><h3>By assigned team</h3><p class="cap">The team that closed the ticket, not the team that owns the service.</p><div class="svgbox" id="team-chart"></div></div>
+    </div>
+    <div class="section-head"><h2>Priority</h2></div>
+    <div class="tablebox"><table id="pri-table"></table></div>
+    <div class="section-head"><h2>Team</h2></div>
+    <div class="tablebox"><table id="team-table"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="trend" aria-labelledby="tab-trend" hidden>
+    <p class="narrative" id="trend-narrative" aria-live="polite"></p>
+    <div class="figure">
+      <h3>Tickets and SLA attainment by month</h3>
+      <p class="cap">Bars are tickets opened that month. The line is the share resolved within SLA, against the on-target line.</p>
+      <div class="svgbox" id="trend-chart"></div>
+    </div>
+    <div class="tablebox"><table id="trend-table"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="preflight" aria-labelledby="tab-preflight" hidden>
+    <p class="narrative" id="pf-narrative" aria-live="polite"></p>
+    <p class="narrative" id="pf-narrative2"></p>
+    <div class="stats" id="pf-stats"></div>
+    <div class="section-head">
+      <h2>The checks</h2>
+      <p>Each check finds rows in the export that need a decision before scoring. Turn one off to score those rows as they arrived, and every view on this page follows.</p>
+    </div>
+    <div class="checks" id="checks"></div>
+    <div class="section-head">
+      <h2>As received, and with these checks</h2>
+      <p>Every category's attainment scored straight from the export, next to the same categories with the checks above applied.</p>
+    </div>
+    <div class="tablebox"><table id="pf-table"></table></div>
+  </section>
+
+  <aside class="behind" aria-labelledby="behind-title">
+    <p class="eyebrow" id="behind-title">Behind the page</p>
+    <div class="callout">
+      <p>This page applies the IT Service Health Analyst recipe to a synthetic export. In the recipe, an AI assistant runs the pre-flight check, flags what it finds, and waits for a person to confirm each decision before scoring. It then drafts recommendations tagged research-backed, industry practice, or analyst judgment. The CIO decides.</p>
+      <p>A case study series on building a ticket health snapshot for a real service desk will draw on this page.</p>
+    </div>
+    <details class="drawer" id="source">
+      <summary><h2>Source file</h2><span class="sub">Every view on this page is drawn from it</span></summary>
+      <div class="drawer-body">
+      <p class="lede" style="margin:0">This YAML is the whole page: the export as received, the pre-flight decisions, and the bands. Edit a ticket, add an alias, or confirm another minutes row, then select Apply to redraw every view. Edits stay in this browser tab until you copy them out.</p>
+      <div class="controls">
+        <button class="btn" id="apply" type="button">Apply changes</button>
+        <button class="btn ghost" id="reset" type="button">Reset to original</button>
+        <button class="btn ghost" id="copy" type="button">Copy YAML</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <div class="two">
+        <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-service-health.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
+        <dl class="schema">
+          <dt>tickets</dt><dd>The export as received, one row per ticket, with the row number from the export file.</dd>
+          <dt>preflight</dt><dd>What a person found and confirmed for each check. Counts and row numbers on the page are computed from the tickets.</dd>
+          <dt>canonical, aliases</dt><dd>The labels the analysis expects, and the old labels a person confirmed map to them.</dd>
+          <dt>settings</dt><dd>The SLA bands and which checks are on. Defaults returns to these values.</dd>
+        </dl>
+      </div>
+      </div>
+    </details>
+  </aside>
+
+  <footer>
+    <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. It matches the sample output of the IT Service Health Analyst recipe.</p>
+    <p><a href="../">All demos</a> · <a href="#source">Source file</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-service-health">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+  </footer>
+</div>
+
+<script type="text/yaml" id="source-yaml">
+# RCU IT Service Health: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It holds the help-desk
+# export exactly as received, the pre-flight decisions a person confirmed, and
+# the SLA bands. Every view is computed from it.
+#
+# Schema
+#   meta        institution, period, steward, as_of
+#   settings    on_target and watch: SLA attainment bands (recipe 02 defaults 0.90 / 0.80)
+#               checks: which pre-flight steps to apply (true = apply)
+#   canonical   the category, priority, and team lists the analysis expects
+#   aliases     old or variant labels -> canonical label. Mapped only when the
+#               category or priority check is on. Unlisted variants stay flagged.
+#   preflight   one entry per check: what a person found and confirmed. Counts and
+#               row numbers on the page are computed from the export, not copied.
+#               minutes.rows lists the rows a person confirmed were logged in minutes;
+#               the page also flags any other row more than 40 times its category's
+#               median time, but converts only confirmed rows.
+#   tickets     the export as received: [row, category, priority, month, SLA target
+#               (hrs), resolution (hrs), the export's own In SLA? flag, assigned team].
+#               row is the row number in the export file.
+#
+# Rules the page applies
+#   in SLA          resolution <= SLA target, recomputed (the export's flag is not trusted)
+#   attainment      tickets in SLA / tickets, for each cut
+#   status          On target >= on_target; Watch >= watch; Below target otherwise
+#   short of target tickets that would have to move inside SLA for a cut to reach
+#                   on_target: ceil(on_target x tickets) - tickets in SLA, never below 0
+#   duplicates      a row identical to an earlier row in every field but row number
+#   unresolved      no resolution time; with the check off they count as missed
+#   month formats   "May 2026" and "06/2026" become 2026-05 and 2026-06; with the check
+#                   off, unreadable months drop out of the trend only
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-07-02"
+  period: January to June 2026
+  steward: IT Service Desk
+  fixture: true
+
+settings:
+  on_target: 0.90
+  watch: 0.80
+  checks: {duplicates: true, unresolved: true, minutes: true, priority_labels: true, category_labels: true, month_formats: true}
+
+canonical:
+  categories: [AV / Classroom Tech, Account/Access, Data/Reporting, ERP, Email & Collaboration, Hardware, LMS, Network/Wi-Fi, Phone/VoIP, Printing, Security/Phishing, Software Install]
+  priorities: [P1, P2, P3, P4]
+  teams: [AV Services, Data Services, Enterprise Apps, Help Desk, Infrastructure, Security]
+
+aliases:
+  categories: {"Email & Collab": Email & Collaboration, "Wi-Fi / Network": Network/Wi-Fi}
+  priorities: {"Priority 3": P3, "p4": P4, "Critical": P1}
+
+preflight:
+  - id: duplicates
+    check: Duplicate rows
+    context: All are LMS tickets from the night the online learning system went offline, logged once by phone and again by email.
+    handled: The help-desk lead confirmed they were double-logged. One copy of each was kept.
+    confirmed_by: Help-desk lead
+  - id: unresolved
+    check: Unresolved tickets
+    context: Still open when the export ran. One also has no assigned team.
+    handled: Set aside. Open tickets can't be scored against SLA yet; they will appear in next month's export.
+    confirmed_by: Help-desk lead
+  - id: minutes
+    check: Mixed units
+    context: These came from the phone-intake form, which records minutes instead of hours.
+    handled: Converted from minutes to hours, only after confirmation, and In SLA recomputed. The export's own flag was computed on minutes.
+    confirmed_by: Help-desk lead
+    rows: [28, 77, 102]
+  - id: priority_labels
+    check: Priority labels
+    context: "'Critical' is the old phone-intake label for P1. The others are typing variants."
+    handled: Mapped to P1 to P4 through the alias list.
+    confirmed_by: Help-desk lead
+  - id: category_labels
+    check: Category labels
+    context: Older category names, from before the catalog was renamed.
+    handled: Matched to the current category list through the alias list. Nothing renamed silently.
+    confirmed_by: Help-desk lead
+  - id: month_formats
+    check: Month formats
+    context: A few rows write the month as words or as MM/YYYY.
+    handled: Normalized to YYYY-MM so months compare like for like.
+    confirmed_by: Automatic, format only
+
+tickets:
+  - [6, "Email & Collaboration", "P1", "2026-06", 4, 4.8, "No", "Infrastructure"]
+  - [7, "Phone/VoIP", "P3", "2026-04", 24, 39.7, "No", "Infrastructure"]
+  - [8, "AV / Classroom Tech", "P4", "2026-03", 72, 166.4, "No", "Security"]
+  - [9, "Account/Access", "Priority 3", "2026-05", 24, 30.1, "No", "Infrastructure"]
+  - [10, "Hardware", "P2", "2026-01", 8, 2.3, "Yes", "Security"]
+  - [11, "Wi-Fi / Network", "P4", "2026-02", 72, 17.5, "Yes", "AV Services"]
+  - [12, "Hardware", "P4", "2026-01", 72, 53.8, "Yes", "Help Desk"]
+  - [13, "Account/Access", "P3", "2026-02", 24, 32.2, "No", "AV Services"]
+  - [14, "Phone/VoIP", "P4", "2026-05", 72, 61.3, "Yes", "Data Services"]
+  - [15, "LMS", "P3", "2026-04", 24, 9.6, "Yes", "Help Desk"]
+  - [16, "Hardware", "Priority 3", "2026-01", 24, 5.8, "Yes", "Help Desk"]
+  - [17, "Software Install", "P4", "2026-04", 72, 60, "Yes", "Infrastructure"]
+  - [18, "LMS", "P4", "2026-02", 72, 47.9, "Yes", "Enterprise Apps"]
+  - [19, "ERP", "P4", "2026-03", 72, 45.6, "Yes", "AV Services"]
+  - [20, "Account/Access", "P4", "2026-02", 72, 30.1, "Yes", "Enterprise Apps"]
+  - [21, "Network/Wi-Fi", "P2", "2026-06", 8, 2.4, "Yes", "Help Desk"]
+  - [22, "Hardware", "P3", "May 2026", 24, 18.3, "Yes", "Enterprise Apps"]
+  - [23, "Account/Access", "P2", "2026-03", 8, 7.1, "Yes", "Help Desk"]
+  - [24, "Email & Collaboration", "P3", "2026-03", 24, 9.7, "Yes", "Security"]
+  - [25, "Email & Collaboration", "P3", "2026-05", 24, 15.5, "Yes", "Help Desk"]
+  - [26, "Phone/VoIP", "P4", "2026-05", 72, 48.2, "Yes", "Data Services"]
+  - [27, "Wi-Fi / Network", "P3", "2026-01", 24, 48.8, "No", "Data Services"]
+  - [28, "Email & Collaboration", "P4", "2026-03", 72, 1608, "No", "AV Services"]
+  - [29, "Data/Reporting", "P3", "2026-02", 24, 20.3, "Yes", "Data Services"]
+  - [30, "Data/Reporting", "p4", "2026-06", 72, 35.7, "Yes", "Help Desk"]
+  - [31, "Hardware", "P3", "2026-04", 24, 7.3, "Yes", "AV Services"]
+  - [32, "AV / Classroom Tech", "P3", "May 2026", 24, 20.8, "Yes", "Data Services"]
+  - [33, "LMS", "P3", "2026-03", 24, 13.6, "Yes", "Help Desk"]
+  - [34, "Network/Wi-Fi", "P3", "2026-02", 24, 1.5, "Yes", "AV Services"]
+  - [35, "Security/Phishing", "P4", "2026-01", 72, 41, "Yes", "Infrastructure"]
+  - [36, "Data/Reporting", "P3", "2026-05", 24, 14.3, "Yes", "Help Desk"]
+  - [37, "Email & Collaboration", "p4", "2026-02", 72, 45.2, "Yes", "AV Services"]
+  - [38, "Account/Access", "P3", "2026-02", 24, 10.3, "Yes", "Security"]
+  - [39, "Phone/VoIP", "P3", "2026-04", 24, 19.3, "Yes", "AV Services"]
+  - [40, "Phone/VoIP", "P3", "2026-02", 24, 42.6, "No", "Infrastructure"]
+  - [41, "Printing", "P3", "2026-05", 24, 6.3, "Yes", "Help Desk"]
+  - [42, "Data/Reporting", "P3", "2026-03", 24, 11.9, "Yes", "Infrastructure"]
+  - [43, "LMS", "P2", "2026-02", 8, 3.3, "Yes", "Enterprise Apps"]
+  - [44, "Phone/VoIP", "P3", "2026-01", 24, 40.4, "No", "Security"]
+  - [45, "Data/Reporting", "P1", "2026-05", 4, 3.4, "Yes", "Enterprise Apps"]
+  - [46, "ERP", "P4", "2026-04", 72, 35.6, "Yes", "Security"]
+  - [47, "Network/Wi-Fi", "P3", "2026-03", 24, 8.7, "Yes", "Data Services"]
+  - [48, "Printing", "P4", "2026-02", 72, 185.1, "No", "Security"]
+  - [49, "Account/Access", "P4", "2026-06", 72, 5.9, "Yes", "AV Services"]
+  - [50, "LMS", "P4", "2026-02", 72, 21.5, "Yes", "AV Services"]
+  - [51, "Software Install", "P3", "2026-04", 24, 18.1, "Yes", "Enterprise Apps"]
+  - [52, "Email & Collaboration", "P3", "May 2026", 24, 39, "No", "Data Services"]
+  - [53, "Email & Collab", "P4", "2026-06", 72, 61.6, "Yes", "Infrastructure"]
+  - [54, "Account/Access", "P3", "2026-03", 24, 2.9, "Yes", "Infrastructure"]
+  - [55, "AV / Classroom Tech", "P3", "2026-04", 24, 20.8, "Yes", "Data Services"]
+  - [56, "Email & Collab", "P4", "2026-02", 72, 2.2, "Yes", "Enterprise Apps"]
+  - [57, "Security/Phishing", "P3", "2026-04", 24, 33.5, "No", "Security"]
+  - [58, "Data/Reporting", "P4", "2026-03", 72, 19.9, "Yes", "Data Services"]
+  - [59, "Security/Phishing", "P4", "2026-05", 72, 28, "Yes", "Enterprise Apps"]
+  - [60, "Email & Collab", "P3", "2026-03", 24, 56, "No", "Help Desk"]
+  - [61, "ERP", "P4", "2026-06", 72, 28.5, "Yes", "Data Services"]
+  - [62, "Phone/VoIP", "P4", "2026-03", 72, 35.1, "Yes", "AV Services"]
+  - [63, "AV / Classroom Tech", "P3", "2026-06", 24, 5.7, "Yes", "Help Desk"]
+  - [64, "Hardware", "P4", "2026-03", 72, 43.5, "Yes", "Enterprise Apps"]
+  - [65, "Account/Access", "P3", "2026-03", 24, 8, "Yes", "Enterprise Apps"]
+  - [66, "Software Install", "P3", "2026-06", 24, 46.4, "No", "Security"]
+  - [67, "Network/Wi-Fi", "P2", "2026-04", 8, 2.1, "Yes", "AV Services"]
+  - [68, "Printing", "P4", "2026-04", 72, 14.7, "Yes", "Data Services"]
+  - [69, "Network/Wi-Fi", "P3", "2026-05", 24, 11.7, "Yes", "AV Services"]
+  - [70, "Data/Reporting", "P3", "2026-04", 24, 7, "Yes", "Infrastructure"]
+  - [71, "Email & Collaboration", "P4", "2026-03", 72, 61.6, "Yes", "Data Services"]
+  - [72, "LMS", "P2", "2026-05", 8, 7, "Yes", "Security"]
+  - [73, "LMS", "P2", "2026-05", 8, 7, "Yes", "Security"]
+  - [74, "Security/Phishing", "P3", "2026-01", 24, 8.1, "Yes", "Enterprise Apps"]
+  - [75, "Account/Access", "P4", "2026-02", 72, 4, "Yes", "Enterprise Apps"]
+  - [76, "Data/Reporting", "P4", "2026-06", 72, 1.3, "Yes", "Enterprise Apps"]
+  - [77, "AV / Classroom Tech", "P3", "2026-03", 24, 2130, "No", "AV Services"]
+  - [78, "Email & Collaboration", "P4", "2026-04", 72, 41, "Yes", "Help Desk"]
+  - [79, "LMS", "P2", "2026-05", 8, 2.2, "Yes", "Security"]
+  - [80, "LMS", "P2", "2026-05", 8, 2.2, "Yes", "Security"]
+  - [81, "ERP", "P3", "2026-06", 24, 8.5, "Yes", "AV Services"]
+  - [82, "Hardware", "P4", "2026-04", 72, 4.4, "Yes", "Data Services"]
+  - [83, "Email & Collaboration", "P4", "2026-02", 72, 43, "Yes", "Infrastructure"]
+  - [84, "Network/Wi-Fi", "P2", "2026-01", 8, 3.5, "Yes", "Security"]
+  - [85, "AV / Classroom Tech", "P3", "2026-03", 24, 15.3, "Yes", "AV Services"]
+  - [86, "Email & Collaboration", "P3", "2026-03", 24, 17.5, "Yes", "Infrastructure"]
+  - [87, "ERP", "P2", "2026-02", 8, 2.3, "Yes", "Infrastructure"]
+  - [88, "Email & Collaboration", "Critical", "2026-03", 4, 2.3, "Yes", "Enterprise Apps"]
+  - [89, "AV / Classroom Tech", "P2", "2026-03", 8, 2.3, "Yes", "Security"]
+  - [90, "AV / Classroom Tech", "P3", "2026-06", 24, 52.8, "No", "Security"]
+  - [91, "Hardware", "P1", "2026-03", 4, 7.9, "No", "Help Desk"]
+  - [92, "Printing", "P4", "2026-05", 72, 11.8, "Yes", "Security"]
+  - [93, "Printing", "P3", "2026-03", 24, 42.1, "No", "AV Services"]
+  - [94, "Email & Collaboration", "P3", "2026-04", 24, 2.7, "Yes", "Infrastructure"]
+  - [95, "Software Install", "P3", "2026-05", 24, 8.9, "Yes", "Security"]
+  - [96, "Account/Access", "P3", "2026-03", 24, 21, "Yes", "AV Services"]
+  - [97, "Phone/VoIP", "P4", "2026-01", 72, 129.1, "No", "Help Desk"]
+  - [98, "Network/Wi-Fi", "P3", "2026-06", 24, 16.5, "Yes", "Infrastructure"]
+  - [99, "Hardware", "P3", "2026-03", 24, 43.8, "No", "Help Desk"]
+  - [100, "Printing", "P3", "2026-03", 24, 12.1, "Yes", "Security"]
+  - [101, "ERP", "P2", "2026-01", 8, 16.6, "No", "Infrastructure"]
+  - [102, "AV / Classroom Tech", "P4", "2026-03", 72, 1632, "No", "AV Services"]
+  - [103, "AV / Classroom Tech", "P3", "2026-05", 24, 20, "Yes", "Security"]
+  - [104, "Data/Reporting", "P4", "2026-01", 72, 55.4, "Yes", "Enterprise Apps"]
+  - [105, "Phone/VoIP", "P3", "2026-01", 24, 18.2, "Yes", "Security"]
+  - [106, "Printing", "P3", "2026-02", 24, 7.8, "Yes", "Security"]
+  - [107, "Phone/VoIP", "P3", "2026-03", 24, 35, "No", "AV Services"]
+  - [108, "Network/Wi-Fi", "P4", "2026-04", 72, 30.9, "Yes", "AV Services"]
+  - [109, "ERP", "P4", "06/2026", 72, 2.9, "Yes", "Security"]
+  - [110, "Security/Phishing", "P3", "2026-01", 24, 19.7, "Yes", "Help Desk"]
+  - [111, "Data/Reporting", "P2", "2026-06", 8, 5.7, "Yes", "Enterprise Apps"]
+  - [112, "Software Install", "P3", "2026-04", 24, 7.4, "Yes", "Data Services"]
+  - [113, "Phone/VoIP", "P3", "2026-03", 24, 16.5, "Yes", "Security"]
+  - [114, "Account/Access", "P3", "2026-03", 24, 6.6, "Yes", "Infrastructure"]
+  - [115, "Data/Reporting", "P2", "2026-01", 8, 1.2, "Yes", "Infrastructure"]
+  - [116, "Data/Reporting", "P3", "2026-01", 24, 1.7, "Yes", "Enterprise Apps"]
+  - [117, "Software Install", "P3", "2026-03", 24, 14.9, "Yes", "Infrastructure"]
+  - [118, "LMS", "P2", "2026-06", 8, 2.1, "Yes", "Security"]
+  - [119, "LMS", "P2", "2026-06", 8, 5, "Yes", "AV Services"]
+  - [120, "Hardware", "P3", "2026-02", 24, 7.8, "Yes", "Security"]
+  - [121, "Hardware", "P3", "2026-04", 24, 18.3, "Yes", "Infrastructure"]
+  - [122, "ERP", "P4", "2026-01", 72, 23.6, "Yes", "Enterprise Apps"]
+  - [123, "Data/Reporting", "P3", "2026-06", 24, 12.4, "Yes", "Data Services"]
+  - [124, "Data/Reporting", "P4", "2026-06", 72, 58.6, "Yes", "Enterprise Apps"]
+  - [125, "Network/Wi-Fi", "P3", "2026-04", 24, 13.6, "Yes", "Data Services"]
+  - [126, "Data/Reporting", "P4", "2026-06", 72, 58.6, "Yes", "Data Services"]
+  - [127, "Account/Access", "P3", "2026-04", 24, 16, "Yes", "Help Desk"]
+  - [128, "Hardware", "P3", "2026-04", 24, 17.1, "Yes", "Enterprise Apps"]
+  - [129, "Phone/VoIP", "P3", "2026-03", 24, 17.9, "Yes", "AV Services"]
+  - [130, "Hardware", "P4", "2026-03", 72, 5.3, "Yes", "Infrastructure"]
+  - [131, "Printing", "P4", "2026-04", 72, 51.3, "Yes", "Help Desk"]
+  - [132, "Hardware", "P3", "2026-04", 24, 14.7, "Yes", "Security"]
+  - [133, "ERP", "P4", "2026-04", 72, 30.8, "Yes", "Security"]
+  - [134, "Phone/VoIP", "P3", "2026-06", 24, 13.9, "Yes", "AV Services"]
+  - [135, "Data/Reporting", "P3", "2026-04", 24, 20.5, "Yes", "Enterprise Apps"]
+  - [136, "AV / Classroom Tech", "P2", "2026-03", 8, 3.5, "Yes", "Data Services"]
+  - [137, "Data/Reporting", "P3", "2026-05", 24, 15.8, "Yes", "AV Services"]
+  - [138, "Printing", "P2", "2026-05", 8, 6.9, "Yes", "Help Desk"]
+  - [139, "Data/Reporting", "P3", "2026-04", 24, 57.2, "No", "Help Desk"]
+  - [140, "Printing", "P3", "2026-06", 24, 6.3, "Yes", "Help Desk"]
+  - [141, "AV / Classroom Tech", "P2", "2026-02", 8, 7, "Yes", "Help Desk"]
+  - [142, "Software Install", "P3", "2026-02", 24, 18, "Yes", "Security"]
+  - [143, "Network/Wi-Fi", "P3", "2026-03", 24, 17.1, "Yes", "Security"]
+  - [144, "Account/Access", "P3", "2026-02", 24, 17.3, "Yes", "Help Desk"]
+  - [145, "Printing", "P4", "2026-02", 72, 51.2, "Yes", "Security"]
+  - [146, "Software Install", "P1", "2026-03", 4, 1.8, "Yes", "Help Desk"]
+  - [147, "Data/Reporting", "P2", "2026-04", 8, 1.2, "Yes", "Security"]
+  - [148, "Network/Wi-Fi", "P4", "2026-01", 72, 56.2, "Yes", "Security"]
+  - [149, "Hardware", "P3", "2026-01", 24, 56.9, "No", "AV Services"]
+  - [150, "Printing", "P2", "2026-04", 8, 12.7, "No", "Infrastructure"]
+  - [151, "Email & Collaboration", "P2", "2026-06", 8, 5.3, "Yes", "AV Services"]
+  - [152, "Security/Phishing", "P3", "2026-04", 24, 2.6, "Yes", "Data Services"]
+  - [153, "Email & Collaboration", "P4", "2026-06", 72, 14.3, "Yes", "AV Services"]
+  - [154, "Network/Wi-Fi", "P3", "2026-04", 24, 2.5, "Yes", "AV Services"]
+  - [155, "Software Install", "P3", "2026-04", 24, 10.5, "Yes", "Help Desk"]
+  - [156, "Email & Collaboration", "P2", "2026-01", 8, 5.9, "Yes", "Security"]
+  - [157, "Account/Access", "P3", "2026-05", 24, 3.1, "Yes", "Enterprise Apps"]
+  - [158, "Printing", "P4", "2026-04", 72, 19, "Yes", "Enterprise Apps"]
+  - [159, "Software Install", "P2", "2026-05", 8, 3.7, "Yes", "Help Desk"]
+  - [160, "Software Install", "P4", "2026-04", 72, 37.4, "Yes", "AV Services"]
+  - [161, "Phone/VoIP", "P4", "2026-06", 72, 36.3, "Yes", "Security"]
+  - [162, "Printing", "P4", "2026-03", 72, 45.7, "Yes", "Enterprise Apps"]
+  - [163, "Software Install", "P3", "2026-02", 24, 9, "Yes", "Infrastructure"]
+  - [164, "Data/Reporting", "P3", "2026-01", 24, 5, "Yes", "AV Services"]
+  - [165, "AV / Classroom Tech", "P3", "2026-04", 24, 16.9, "Yes", "Security"]
+  - [166, "Security/Phishing", "P2", "2026-01", 8, 4.6, "Yes", "Data Services"]
+  - [167, "Email & Collaboration", "P3", "2026-06", 24, 9.8, "Yes", "Enterprise Apps"]
+  - [168, "Network/Wi-Fi", "P4", "2026-01", 72, 18.7, "Yes", "Data Services"]
+  - [169, "Security/Phishing", "P3", "2026-06", 24, 8.8, "Yes", "Security"]
+  - [170, "Account/Access", "P1", "2026-03", 4, 2.9, "Yes", "Enterprise Apps"]
+  - [171, "Software Install", "P2", "2026-05", 8, 1.4, "Yes", "Security"]
+  - [172, "Data/Reporting", "P2", "2026-05", 8, 1, "Yes", "Data Services"]
+  - [173, "Account/Access", "P3", "2026-04", 24, 47.1, "No", "Security"]
+  - [174, "ERP", "P4", "2026-04", 72, 1.8, "Yes", "Enterprise Apps"]
+  - [175, "LMS", "P4", "2026-06", 72, 178.5, "No", "Help Desk"]
+  - [176, "ERP", "P4", "2026-03", 72, 34.2, "Yes", "AV Services"]
+  - [177, "Hardware", "P4", "2026-02", 72, 5.4, "Yes", "Data Services"]
+  - [178, "Email & Collaboration", "P3", "2026-02", 24, 20.7, "Yes", "Data Services"]
+  - [179, "LMS", "P2", "2026-02", 8, 4.5, "Yes", "Data Services"]
+  - [180, "Email & Collaboration", "P2", "2026-06", 8, 4.3, "Yes", "Security"]
+  - [181, "AV / Classroom Tech", "P3", "2026-05", 24, 13.7, "Yes", "Data Services"]
+  - [182, "Software Install", "P2", "2026-01", 8, 2.5, "Yes", "Enterprise Apps"]
+  - [183, "Security/Phishing", "P1", "2026-05", 4, 1.9, "Yes", "Help Desk"]
+  - [184, "Software Install", "P4", "2026-01", 72, 171.6, "No", "Security"]
+  - [185, "Security/Phishing", "P3", "2026-04", 24, 17.2, "Yes", "Help Desk"]
+  - [186, "AV / Classroom Tech", "P4", "2026-05", 72, 39.4, "Yes", "Security"]
+  - [187, "LMS", "P4", "2026-04", 72, 54.3, "Yes", "Data Services"]
+  - [188, "Email & Collaboration", "P3", "2026-02", 24, 9.7, "Yes", "AV Services"]
+  - [189, "Phone/VoIP", "P3", "2026-02", 24, 6.5, "Yes", "AV Services"]
+  - [190, "Software Install", "P3", "2026-01", 24, 1.9, "Yes", "Help Desk"]
+  - [191, "Phone/VoIP", "P3", "2026-03", 24, 14.4, "Yes", "Security"]
+  - [192, "LMS", "P3", "2026-05", 24, 7.9, "Yes", "Data Services"]
+  - [193, "LMS", "P3", "2026-05", 24, 7.9, "Yes", "Data Services"]
+  - [194, "Data/Reporting", "P3", "2026-02", 24, 2.3, "Yes", "Security"]
+  - [195, "ERP", "P3", "2026-03", 24, 18, "Yes", "Data Services"]
+  - [196, "Printing", "P4", "2026-01", 72, 33.2, "Yes", "Help Desk"]
+  - [197, "Software Install", "P3", "2026-02", 24, 43.9, "No", "Infrastructure"]
+  - [198, "LMS", "P2", "2026-03", 8, 4.1, "Yes", "Data Services"]
+  - [199, "Phone/VoIP", "P1", "2026-03", 4, 1.7, "Yes", "Infrastructure"]
+  - [200, "LMS", "P4", "2026-06", 72, 3.3, "Yes", "Enterprise Apps"]
+  - [201, "Printing", "P4", "2026-04", 72, 48.6, "Yes", "AV Services"]
+  - [202, "Network/Wi-Fi", "P3", "2026-03", 24, 33.4, "No", "Data Services"]
+  - [203, "Security/Phishing", "P4", "2026-04", 72, 32.8, "Yes", "AV Services"]
+  - [204, "LMS", "P4", "2026-06", 72, 84.8, "No", "AV Services"]
+  - [205, "Software Install", "P3", "2026-01", 24, 57, "No", "Enterprise Apps"]
+  - [206, "Email & Collaboration", "P4", "2026-03", 72, 95.1, "No", "AV Services"]
+  - [207, "Email & Collaboration", "P4", "2026-02", 72, 179.7, "No", "AV Services"]
+  - [208, "Account/Access", "P3", "2026-04", 24, 2.2, "Yes", "Infrastructure"]
+  - [209, "Account/Access", "P3", "2026-01", 24, 17.2, "Yes", "Infrastructure"]
+  - [210, "Account/Access", "P3", "2026-05", 24, 53.7, "No", "AV Services"]
+  - [211, "AV / Classroom Tech", "P3", "2026-01", 24, 18.1, "Yes", "Security"]
+  - [212, "Data/Reporting", "P3", "2026-04", 24, 5.5, "Yes", "Help Desk"]
+  - [213, "Account/Access", "P2", "2026-06", 8, 1.2, "Yes", "AV Services"]
+  - [214, "Security/Phishing", "P3", "2026-06", 24, 15.7, "Yes", "Enterprise Apps"]
+  - [215, "ERP", "P1", "2026-04", 4, 1.1, "Yes", "Data Services"]
+  - [216, "Email & Collaboration", "P3", "2026-04", 24, 46, "No", "Security"]
+  - [217, "Phone/VoIP", "P1", "2026-05", 4, 3.5, "Yes", "Enterprise Apps"]
+  - [218, "Account/Access", "P3", "2026-06", 24, null, null, null]
+  - [219, "Data/Reporting", "P1", "2026-01", 4, 2.5, "Yes", "Help Desk"]
+  - [220, "Security/Phishing", "P4", "2026-03", 72, 35.6, "Yes", "Data Services"]
+  - [221, "LMS", "P4", "2026-06", 72, 130.9, "No", "Infrastructure"]
+  - [222, "LMS", "P2", "2026-04", 8, 0.8, "Yes", "Infrastructure"]
+  - [223, "Account/Access", "P3", "2026-03", 24, 17.7, "Yes", "AV Services"]
+  - [224, "LMS", "P2", "2026-06", 8, null, null, "Enterprise Apps"]
+  - [225, "Printing", "P4", "2026-06", 72, null, null, "Help Desk"]
+  - [226, "Hardware", "P1", "2026-06", 4, 3.2, "Yes", "Help Desk"]
+  - [227, "Printing", "P3", "2026-02", 24, 8.9, "Yes", "AV Services"]
+  - [228, "ERP", "P3", "2026-02", 24, 8.3, "Yes", "Security"]
+  - [229, "Hardware", "P4", "2026-04", 72, 64.5, "Yes", "Infrastructure"]
+  - [230, "Phone/VoIP", "P3", "2026-01", 24, 6.7, "Yes", "AV Services"]
+  - [231, "Security/Phishing", "P4", "2026-02", 72, 29.3, "Yes", "Data Services"]
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" integrity="sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const MINUS = "−";
+  const pct = (x, d = 1) => x == null || !isFinite(x) ? "n/a" : (x < 0 ? MINUS : "") + Math.abs(x * 100).toFixed(d) + "%";
+  const pts = (x) => (x > 0 ? "+" : x < 0 ? MINUS : "") + Math.abs(x * 100).toFixed(1) + " pts";
+  const int = (n) => Math.round(Number(n)).toLocaleString();
+  const hrs = (h) => (h == null || !isFinite(h) ? "n/a" : h.toFixed(1) + " h");
+  const list = (a) => a.length <= 1 ? a.join("") : a.length === 2 ? a[0] + " and " + a[1] : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
+  const plural = (n, one, many) => int(n) + " " + (n === 1 ? one : many || one + "s");
+  const ORIGINAL = $("source-yaml").textContent.replace(/^\n/, "");
+  const CHECK_IDS = ["duplicates", "unresolved", "minutes", "priority_labels", "category_labels", "month_formats"];
+  const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+  // ---- Model -----------------------------------------------------------
+  function build(text) {
+    if (typeof jsyaml === "undefined") throw new Error("The YAML parser did not load. Check your connection and reload the page.");
+    const d = jsyaml.load(text);
+    if (!d || typeof d !== "object") throw new Error("The source is empty.");
+    const st = d.settings || {};
+    ["on_target", "watch"].forEach((k) => { if (typeof st[k] !== "number" || st[k] <= 0 || st[k] >= 1) throw new Error("settings." + k + " must be a share between 0 and 1, such as 0.9."); });
+    if (st.watch >= st.on_target) throw new Error("settings.watch must be below settings.on_target.");
+    const checks = {}; CHECK_IDS.forEach((k) => (checks[k] = !st.checks || st.checks[k] !== false));
+    const can = d.canonical || {};
+    ["categories", "priorities", "teams"].forEach((k) => { if (!Array.isArray(can[k]) || !can[k].length) throw new Error("canonical." + k + " needs a list."); });
+    const al = d.aliases || {};
+    const pf = Array.isArray(d.preflight) ? d.preflight : [];
+    const pfById = {}; pf.forEach((p) => p && p.id && (pfById[p.id] = p));
+    if (!Array.isArray(d.tickets) || !d.tickets.length) throw new Error("tickets needs at least one row.");
+    const seen = new Set();
+    const tickets = d.tickets.map((t, i) => {
+      if (!Array.isArray(t) || t.length < 8) throw new Error("tickets[" + i + "] needs 8 values: row, category, priority, month, SLA hours, resolution hours, In SLA flag, team.");
+      const [row, cat, pri, month, sla, res, flag, team] = t;
+      if (typeof row !== "number") throw new Error("tickets[" + i + "]: the first value is the export row number.");
+      if (seen.has(row)) throw new Error("Row " + row + " appears twice in tickets. Row numbers come from the export file and must be unique."); seen.add(row);
+      if (typeof sla !== "number" || sla <= 0) throw new Error("Row " + row + ": SLA target must be a positive number of hours.");
+      if (res != null && typeof res !== "number") throw new Error("Row " + row + ": resolution must be a number of hours, or null if still open.");
+      return { row, cat: String(cat ?? ""), pri: String(pri ?? ""), month: month == null ? "" : String(month), sla, res: res == null ? null : res, flag, team: team == null ? null : String(team) };
+    });
+    const minutesRows = new Set(((pfById.minutes || {}).rows || []).map(Number));
+    return { meta: d.meta || {}, can, aliases: { cat: al.categories || {}, pri: al.priorities || {} }, pf, pfById, tickets, minutesRows, defaults: { on_target: st.on_target, watch: st.watch, checks } };
+  }
+
+  const normMonth = (m) => {
+    m = String(m).trim();
+    if (/^\d{4}-\d{2}$/.test(m)) return m;
+    let x = m.match(/^(\d{1,2})\/(\d{4})$/); if (x) return x[2] + "-" + x[1].padStart(2, "0");
+    x = m.match(/^([A-Za-z]+)\s+(\d{4})$/); if (x) { const i = MONTHS.findIndex((n) => n.startsWith(x[1].toLowerCase().slice(0, 3))); if (i >= 0) return x[2] + "-" + String(i + 1).padStart(2, "0"); }
+    return null;
+  };
+  const median = (a) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+
+  // What the checks find in the export, regardless of which are switched on.
+  function detect(M) {
+    const key = (t) => [t.cat, t.pri, t.month, t.sla, t.res, t.flag, t.team].join("|");
+    const first = new Map(), dup = [];
+    M.tickets.forEach((t) => { const k = key(t); if (first.has(k)) dup.push(t.row); else first.set(k, t.row); });
+    const open = M.tickets.filter((t) => t.res == null).map((t) => t.row);
+    const byCat = {}; M.tickets.forEach((t) => { if (t.res != null) (byCat[t.cat] = byCat[t.cat] || []).push(t.res); });
+    const looksMinutes = M.tickets.filter((t) => t.res != null && t.res > 40 * (median(byCat[t.cat]) || Infinity) && t.res / 60 < t.sla * 10).map((t) => t.row);
+    const confirmed = M.tickets.filter((t) => M.minutesRows.has(t.row)).map((t) => t.row);
+    const pri = M.tickets.filter((t) => !M.can.priorities.includes(t.pri)).map((t) => t.row);
+    const priUnmapped = M.tickets.filter((t) => !M.can.priorities.includes(t.pri) && !M.can.priorities.includes(M.aliases.pri[t.pri])).map((t) => t.row);
+    const cat = M.tickets.filter((t) => !M.can.categories.includes(t.cat)).map((t) => t.row);
+    const catUnmapped = M.tickets.filter((t) => !M.can.categories.includes(t.cat) && !M.can.categories.includes(M.aliases.cat[t.cat])).map((t) => t.row);
+    const mon = M.tickets.filter((t) => !/^\d{4}-\d{2}$/.test(t.month)).map((t) => t.row);
+    const monBad = M.tickets.filter((t) => normMonth(t.month) == null).map((t) => t.row);
+    return { duplicates: dup, unresolved: open, minutes: confirmed, minutesSuspect: looksMinutes.filter((r) => !M.minutesRows.has(r)), priority_labels: pri, priUnmapped, category_labels: cat, catUnmapped, month_formats: mon, monBad };
+  }
+
+  function score(M, S, checks, D) {
+    const dup = new Set(D.duplicates), rows = [], aside = { duplicates: 0, unresolved: 0 };
+    M.tickets.forEach((t) => {
+      if (checks.duplicates && dup.has(t.row)) { aside.duplicates++; return; }
+      if (t.res == null && checks.unresolved) { aside.unresolved++; return; }
+      const cat = checks.category_labels && M.aliases.cat[t.cat] ? M.aliases.cat[t.cat] : t.cat;
+      const pri = checks.priority_labels && M.aliases.pri[t.pri] ? M.aliases.pri[t.pri] : t.pri;
+      const month = checks.month_formats ? normMonth(t.month) : (/^\d{4}-\d{2}$/.test(t.month) ? t.month : null);
+      const res = t.res != null && checks.minutes && M.minutesRows.has(t.row) ? t.res / 60 : t.res;
+      rows.push({ row: t.row, cat, pri, month, team: t.team || "(no team)", sla: t.sla, res, ok: res != null && res <= t.sla });
+    });
+    const cut = (f) => {
+      const g = new Map();
+      rows.forEach((r) => { const k = f(r); if (k == null) return; const a = g.get(k) || { name: k, n: 0, met: 0, resSum: 0, resN: 0 }; a.n++; if (r.ok) a.met++; if (r.res != null) { a.resSum += r.res; a.resN++; } g.set(k, a); });
+      return [...g.values()].map((a) => finish(a, S));
+    };
+    const all = finish(rows.reduce((a, r) => { a.n++; if (r.ok) a.met++; if (r.res != null) { a.resSum += r.res; a.resN++; } return a; }, { name: "All tickets", n: 0, met: 0, resSum: 0, resN: 0 }), S);
+    return { rows, aside, all, cats: cut((r) => r.cat), pris: cut((r) => r.pri), teams: cut((r) => r.team), months: cut((r) => r.month).sort((a, b) => a.name.localeCompare(b.name)), noMonth: rows.filter((r) => !r.month).length };
+  }
+  function finish(a, S) {
+    a.att = a.n ? a.met / a.n : null;
+    a.avg = a.resN ? a.resSum / a.resN : null;
+    a.short = Math.max(0, Math.ceil(S.on_target * a.n - 1e-9) - a.met);
+    a.status = a.att == null ? "" : a.att >= S.on_target - 1e-12 ? "On target" : a.att >= S.watch - 1e-12 ? "Watch" : "Below target";
+    a.cls = { "On target": "ok", Watch: "warn", "Below target": "crit" }[a.status] || "";
+    return a;
+  }
+
+  // ---- State and controls ----------------------------------------------
+  let M, S, D, catSort = "att", catDir = 1;
+  const cloneS = (x) => ({ on_target: x.on_target, watch: x.watch, checks: Object.assign({}, x.checks) });
+  const SLIDERS = [
+    { k: "on_target", label: "On target at", min: 0.7, max: 0.99, step: 0.01 },
+    { k: "watch", label: "Watch from", min: 0.5, max: 0.98, step: 0.01 },
+  ];
+  const PRESETS = () => [
+    { id: "defaults", label: "Defaults", set: { on_target: M.defaults.on_target, watch: M.defaults.watch } },
+    { id: "strict", label: "Stricter (95% and 85%)", set: { on_target: 0.95, watch: 0.85 } },
+    { id: "loose", label: "Looser (85% and 75%)", set: { on_target: 0.85, watch: 0.75 } },
+  ];
+  function renderControls() {
+    $("sliders").innerHTML = SLIDERS.map((s) => '<div class="slider"><label for="s-' + s.k + '"><span>' + esc(s.label) + '</span><output id="o-' + s.k + '" for="s-' + s.k + '"></output></label><input type="range" id="s-' + s.k + '" data-k="' + s.k + '" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '"></div>').join("");
+    $("presets").innerHTML = PRESETS().map((p) => '<button type="button" class="chipbtn" data-preset="' + p.id + '" aria-pressed="false">' + esc(p.label) + "</button>").join("");
+  }
+  function syncControls() {
+    SLIDERS.forEach((s) => {
+      const el = $("s-" + s.k), o = $("o-" + s.k), v = S[s.k];
+      el.value = String(v); const t = pct(v, 0); el.setAttribute("aria-valuetext", t); o.textContent = t;
+      o.classList.toggle("changed", Math.abs(v - M.defaults[s.k]) > 1e-9);
+    });
+    document.querySelectorAll("[data-preset]").forEach((b) => { const p = PRESETS().find((x) => x.id === b.dataset.preset); b.setAttribute("aria-pressed", String(Math.abs(p.set.on_target - S.on_target) < 1e-9 && Math.abs(p.set.watch - S.watch) < 1e-9)); });
+  }
+
+  // ---- Shared drawing ---------------------------------------------------
+  const stat = (n, k, cls) => '<div class="stat ' + (cls || "") + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>";
+  const pill = (a) => (a.status ? '<span class="pill ' + a.cls + '">' + esc(a.status) + "</span>" : "");
+  function barsSVG(items, opts) {
+    const W = opts.width || 940, rowH = 30, T = 30, L = opts.labelW || 210, R = 150, B = 30, H = T + items.length * rowH + B;
+    const lo = Math.min(0.5, Math.floor(Math.min(...items.map((a) => a.att ?? 1)) * 10) / 10), X = (v) => L + ((v - lo) / (1 - lo)) * (W - L - R);
+    let g = '<rect class="zone crit" x="' + X(lo) + '" y="' + T + '" width="' + (X(S.watch) - X(lo)) + '" height="' + (H - T - B) + '"/>' +
+      '<rect class="zone warn" x="' + X(S.watch) + '" y="' + T + '" width="' + (X(S.on_target) - X(S.watch)) + '" height="' + (H - T - B) + '"/>' +
+      '<rect class="zone ok" x="' + X(S.on_target) + '" y="' + T + '" width="' + (X(1) - X(S.on_target)) + '" height="' + (H - T - B) + '"/>';
+    const zl = [[lo, S.watch, "Below", "crit"], [S.watch, S.on_target, "Watch", "warn"], [S.on_target, 1, "On target", "ok"]];
+    zl.forEach(([a, b, t, c]) => { if (X(b) - X(a) > 46) g += '<text class="zonelabel ' + c + '" x="' + ((X(a) + X(b)) / 2) + '" y="' + (T - 10) + '" text-anchor="middle">' + t + "</text>"; });
+    for (let v = Math.ceil(lo * 10) / 10; v <= 1.0001; v += 0.1) g += '<line class="grid" x1="' + X(v) + '" x2="' + X(v) + '" y1="' + T + '" y2="' + (H - B) + '"/><text class="tick" x="' + X(v) + '" y="' + (H - B + 18) + '" text-anchor="middle">' + pct(v, 0) + "</text>";
+    items.forEach((a, i) => {
+      const y = T + i * rowH, w = Math.max(2, X(a.att) - X(lo));
+      g += '<text class="rowlabel" x="' + (L - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end">' + esc(a.name) + "</text>";
+      g += '<rect class="bar ' + a.cls + '" x="' + X(lo) + '" y="' + (y + 6) + '" width="' + w + '" height="' + (rowH - 12) + '" rx="2"><title>' + esc(a.name + ": " + pct(a.att) + " of " + a.n + " tickets within SLA, " + a.status) + "</title></rect>";
+      g += '<text class="vlabel" x="' + (X(a.att) + 8) + '" y="' + (y + rowH / 2 + 4) + '">' + pct(a.att) + " · " + plural(a.n, "ticket") + "</text>";
+    });
+    const label = (opts.label || "Bar chart of SLA attainment") + ". " + items.map((a) => a.name + " " + pct(a.att) + ", " + a.status).join("; ") + ".";
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+  function cutTable(id, items, nameLabel, sortable) {
+    const cols = [
+      { k: "name", label: nameLabel, get: (a) => a.name.toLowerCase() },
+      { k: "n", label: "Tickets", num: true, get: (a) => a.n },
+      { k: "att", label: "Within SLA", num: true, get: (a) => a.att },
+      { k: "avg", label: "Avg resolution", num: true, get: (a) => a.avg ?? -1 },
+      { k: "short", label: "Short of target", num: true, get: (a) => a.short },
+      { k: "status", label: "Status", get: (a) => ["Below target", "Watch", "On target"].indexOf(a.status) },
+    ];
+    let rows = items;
+    if (sortable) { const c = cols.find((x) => x.k === catSort); rows = items.slice().sort((a, b) => { const x = c.get(a), y = c.get(b); return (x < y ? -1 : x > y ? 1 : 0) * catDir || a.name.localeCompare(b.name); }); }
+    let h = "<thead><tr>" + cols.map((c) => {
+      const s = sortable ? ' aria-sort="' + (c.k === catSort ? (catDir < 0 ? "descending" : "ascending") : "none") + '"' : "";
+      return '<th scope="col"' + (c.num ? ' class="num"' : "") + s + ">" + (sortable ? '<button type="button" data-sort="' + c.k + '">' + esc(c.label) + "</button>" : esc(c.label)) + "</th>";
+    }).join("") + "</tr></thead><tbody>";
+    rows.forEach((a) => (h += '<tr><th scope="row">' + esc(a.name) + '</th><td class="num">' + int(a.n) + '</td><td class="num"><strong>' + pct(a.att) + '</strong><span class="sub">' + int(a.met) + " of " + int(a.n) + '</span></td><td class="num">' + hrs(a.avg) + '</td><td class="num">' + (a.short ? int(a.short) : "—") + '</td><td class="status-cell">' + pill(a) + "</td></tr>"));
+    $(id).innerHTML = h + "</tbody>";
+  }
+
+  // ---- Views -------------------------------------------------------------
+  function renderHealth(R) {
+    const cats = R.cats.slice().sort((a, b) => a.att - b.att || b.n - a.n);
+    const below = cats.filter((a) => a.status === "Below target"), watch = cats.filter((a) => a.status === "Watch"), on = cats.filter((a) => a.status === "On target");
+    const period = M.meta.period ? "From " + M.meta.period + ", " : "";
+    let s = (period ? period + "the service desk" : "The service desk") + " resolved <strong>" + pct(R.all.att) + " of " + int(R.all.n) + " tickets</strong> within their SLA, against a " + pct(S.on_target, 0) + " target. ";
+    s += below.length ? plural(below.length, "category is", "categories are") + " below target: " + list(below.map((a) => esc(a.name) + " (" + pct(a.att) + ")")) + ". " : "No category is below target. ";
+    s += R.all.short ? "Reaching " + pct(S.on_target, 0) + " overall would take <strong>" + plural(R.all.short, "more ticket") + "</strong> closed inside SLA." : "The service desk is on target overall.";
+    $("health-narrative").innerHTML = s;
+    $("health-stats").innerHTML = stat(int(R.all.n), "Tickets scored") + stat(pct(R.all.att), "Within SLA; target " + pct(S.on_target, 0), R.all.cls) + stat(hrs(R.all.avg), "Average resolution") +
+      stat(below.length + " · " + watch.length + " · " + on.length, "Categories below · watch · on target") + stat(int(R.all.short), "Tickets short of target", R.all.short ? "warn" : "ok");
+    $("cat-chart").innerHTML = barsSVG(cats, { label: "Bar chart of SLA attainment by service category, lowest first" });
+    cutTable("cat-table", R.cats, "Category", true);
+  }
+
+  function renderCuts(R) {
+    const pris = R.pris.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const worstPri = R.pris.slice().sort((a, b) => b.short - a.short || a.att - b.att)[0];
+    const big = R.pris.slice().sort((a, b) => b.n - a.n)[0];
+    const teams = R.teams.slice().sort((a, b) => a.att - b.att), named = teams.filter((t) => t.name !== "(no team)"), lowTeam = named[0], highTeam = named[named.length - 1];
+    let s = "";
+    if (worstPri) s += "<strong>" + esc(worstPri.name) + "</strong>" + (worstPri === big ? ", the largest priority band with " + plural(worstPri.n, "ticket") + "," : " (" + plural(worstPri.n, "ticket") + ")") + " is " + plural(worstPri.short, "ticket") + " short of target, the most of any priority. The gap sits in routine work, not in emergencies. ";
+    if (lowTeam && highTeam && lowTeam !== highTeam) s += "By team, " + esc(lowTeam.name) + " is lowest at " + pct(lowTeam.att) + " and " + esc(highTeam.name) + " highest at " + pct(highTeam.att) + ".";
+    const odd = R.pris.filter((p) => !M.can.priorities.includes(p.name));
+    if (odd.length) s += " " + plural(odd.length, "priority label", "priority labels") + " outside P1 to P4 (" + list(odd.map((p) => "“" + esc(p.name) + "”")) + ") are scored as their own bands because the priority check is off.";
+    $("cuts-narrative").innerHTML = s;
+    $("pri-chart").innerHTML = barsSVG(pris, { width: 640, labelW: 120, label: "Bar chart of SLA attainment by priority" });
+    $("team-chart").innerHTML = barsSVG(teams, { width: 640, labelW: 140, label: "Bar chart of SLA attainment by assigned team, lowest first" });
+    cutTable("pri-table", pris, "Priority", false);
+    cutTable("team-table", teams, "Team", false);
+  }
+
+  function renderTrend(R) {
+    const m = R.months; if (!m.length) { $("trend-narrative").textContent = "No ticket has a readable month."; $("trend-chart").innerHTML = ""; $("trend-table").innerHTML = ""; return; }
+    const maxN = Math.max(...m.map((a) => a.n)), peaks = m.filter((a) => a.n === maxN), low = m.slice().sort((a, b) => a.att - b.att)[0], high = m.slice().sort((a, b) => b.att - a.att)[0];
+    const name = (k) => { const [y, mo] = k.split("-"); return MONTHS[+mo - 1] ? MONTHS[+mo - 1][0].toUpperCase() + MONTHS[+mo - 1].slice(1) : k; };
+    let s = "Volume peaks in <strong>" + list(peaks.map((a) => name(a.name))) + "</strong> at " + plural(maxN, "ticket") + (peaks.length > 1 ? " each" : "") + ". ";
+    s += "Attainment is lowest in " + name(low.name) + " (" + pct(low.att) + ") and highest in " + name(high.name) + " (" + pct(high.att) + "). " + (m.some((a) => a.att >= S.on_target) ? "Only " + list(m.filter((a) => a.att >= S.on_target).map((a) => name(a.name))) + " reach" + (m.filter((a) => a.att >= S.on_target).length === 1 ? "es " : " ") + pct(S.on_target, 0) + "." : "No month reaches " + pct(S.on_target, 0) + ".");
+    if (R.noMonth) s += " " + plural(R.noMonth, "ticket has a month", "tickets have months") + " the page can't read, so " + (R.noMonth === 1 ? "it is" : "they are") + " left out of this view.";
+    $("trend-narrative").innerHTML = s;
+    const W = 940, H = 360, L = 60, Rr = 60, T = 24, mid = 150, B = 40, bw = (W - L - Rr) / m.length;
+    const Yv = (v) => T + (1 - v / (Math.ceil(maxN / 10) * 10)) * (mid - T - 20);
+    const lo = Math.min(0.6, Math.floor(Math.min(...m.map((a) => a.att)) * 10) / 10), Ya = (v) => mid + 20 + (1 - (v - lo) / (1 - lo)) * (H - mid - 20 - B);
+    let g = "";
+    const top = Math.ceil(maxN / 10) * 10;
+    for (let v = 0; v <= top; v += top / 2) g += '<line class="grid" x1="' + L + '" x2="' + (W - Rr) + '" y1="' + Yv(v) + '" y2="' + Yv(v) + '"/><text class="tick" x="' + (L - 8) + '" y="' + (Yv(v) + 4) + '" text-anchor="end">' + v + "</text>";
+    g += '<text class="axistitle" x="' + L + '" y="14">Tickets</text>';
+    g += '<rect class="zone crit" x="' + L + '" width="' + (W - L - Rr) + '" y="' + Ya(S.watch) + '" height="' + (Ya(lo) - Ya(S.watch)) + '"/><rect class="zone warn" x="' + L + '" width="' + (W - L - Rr) + '" y="' + Ya(S.on_target) + '" height="' + (Ya(S.watch) - Ya(S.on_target)) + '"/><rect class="zone ok" x="' + L + '" width="' + (W - L - Rr) + '" y="' + Ya(1) + '" height="' + (Ya(S.on_target) - Ya(1)) + '"/>';
+    for (let v = lo; v <= 1.0001; v += 0.1) g += '<text class="tick" x="' + (L - 8) + '" y="' + (Ya(v) + 4) + '" text-anchor="end">' + pct(v, 0) + "</text>";
+    g += '<text class="axistitle" x="' + L + '" y="' + (mid + 12) + '">Within SLA</text>';
+    g += '<line class="bandline" x1="' + L + '" x2="' + (W - Rr) + '" y1="' + Ya(S.on_target) + '" y2="' + Ya(S.on_target) + '"/><text class="reflabel" x="' + (W - Rr + 6) + '" y="' + (Ya(S.on_target) + 4) + '">' + pct(S.on_target, 0) + "</text>";
+    m.forEach((a, i) => {
+      const cx = L + bw * (i + 0.5);
+      g += '<rect class="bar vol" x="' + (cx - bw * 0.3) + '" y="' + Yv(a.n) + '" width="' + bw * 0.6 + '" height="' + (Yv(0) - Yv(a.n)) + '" rx="2"><title>' + esc(name(a.name) + ": " + a.n + " tickets") + '</title></rect><text class="vlabel" x="' + cx + '" y="' + (Yv(a.n) - 6) + '" text-anchor="middle">' + a.n + "</text>";
+      g += '<text class="tick" x="' + cx + '" y="' + (H - B + 22) + '" text-anchor="middle">' + esc(name(a.name).slice(0, 3)) + "</text>";
+    });
+    g += '<path class="attline" d="' + m.map((a, i) => (i ? "L" : "M") + (L + bw * (i + 0.5)).toFixed(1) + "," + Ya(a.att).toFixed(1)).join(" ") + '"/>';
+    m.forEach((a, i) => (g += '<circle class="attdot" cx="' + (L + bw * (i + 0.5)) + '" cy="' + Ya(a.att) + '" r="5"><title>' + esc(name(a.name) + ": " + pct(a.att) + " within SLA") + '</title></circle><text class="vlabel" x="' + (L + bw * (i + 0.5)) + '" y="' + (Ya(a.att) - 10) + '" text-anchor="middle">' + pct(a.att, 1) + "</text>"));
+    const label = "Monthly tickets and SLA attainment. " + m.map((a) => name(a.name) + ": " + a.n + " tickets, " + pct(a.att) + " within SLA").join("; ") + ".";
+    $("trend-chart").innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+    $("trend-table").innerHTML = "<caption class='sr'>Tickets and SLA attainment by month</caption><thead><tr><th scope='col'>Month</th><th scope='col' class='num'>Tickets</th><th scope='col' class='num'>Within SLA</th><th scope='col' class='num'>Avg resolution</th><th scope='col'>Status</th></tr></thead><tbody>" +
+      m.map((a) => '<tr><th scope="row">' + esc(name(a.name) + " " + a.name.slice(0, 4)) + '</th><td class="num">' + a.n + '</td><td class="num">' + pct(a.att) + '</td><td class="num">' + hrs(a.avg) + '</td><td class="status-cell">' + pill(a) + "</td></tr>").join("") + "</tbody>";
+  }
+
+  function renderPreflight(R) {
+    const raw = score(M, S, Object.fromEntries(CHECK_IDS.map((k) => [k, false])), D);
+    const allOn = score(M, S, Object.fromEntries(CHECK_IDS.map((k) => [k, true])), D);
+    const flagged = new Set([...D.duplicates, ...D.unresolved, ...D.minutes, ...D.priority_labels, ...D.category_labels, ...D.month_formats]);
+    const setAside = R.aside.duplicates + R.aside.unresolved;
+    const canonCats = new Set(M.can.categories);
+    const rawBy = new Map(raw.cats.map((a) => [a.name, a])), onBy = new Map(allOn.cats.map((a) => [a.name, a]));
+    const flips = M.can.categories.filter((c) => rawBy.get(c) && onBy.get(c) && rawBy.get(c).status !== onBy.get(c).status);
+    const ups = flips.filter((c) => ["Below target", "Watch", "On target"].indexOf(rawBy.get(c).status) > ["Below target", "Watch", "On target"].indexOf(onBy.get(c).status));
+    const extra = raw.cats.filter((a) => !canonCats.has(a.name));
+    let s = "The export arrived with <strong>" + plural(M.tickets.length, "row") + "</strong>. The checks found <strong>" + plural(flagged.size, "row") + "</strong> that needed a decision before scoring: " +
+      list([D.duplicates.length && plural(D.duplicates.length, "duplicate"), D.unresolved.length && plural(D.unresolved.length, "open ticket"), D.minutes.length && plural(D.minutes.length, "time logged in minutes", "times logged in minutes"), (D.priority_labels.length + D.category_labels.length) && plural(D.priority_labels.length + D.category_labels.length, "old label"), D.month_formats.length && plural(D.month_formats.length, "odd month format")].filter(Boolean)) + ".";
+    $("pf-narrative").innerHTML = s;
+    let s2 = "Scored as received, attainment reads <strong>" + pct(raw.all.att) + "</strong> instead of <strong>" + pct(allOn.all.att) + "</strong>";
+    if (extra.length) s2 += ", the category list grows from " + M.can.categories.length + " to " + raw.cats.length;
+    s2 += flips.length ? ", and <strong>" + plural(flips.length, "category changes", "categories change") + " status</strong>. " : ". ";
+    if (ups.length) s2 += list(ups.map(esc)) + " would look " + (ups.length === 1 ? "better than it is" : "better than they are") + " only because some of " + (ups.length === 1 ? "its" : "their") + " missed tickets are filed under an old name.";
+    $("pf-narrative2").innerHTML = s2;
+    $("pf-stats").innerHTML = stat(int(M.tickets.length), "Rows received") + stat(int(flagged.size), "Rows that needed a decision", "warn") + stat(int(setAside), "Set aside") + stat(int(R.all.n), "Scored") +
+      stat(pct(raw.all.att) + " → " + pct(R.all.att), "Within SLA, as received → with these checks");
+    const rowsTxt = (a) => (a.length ? "Export rows " + a.join(", ") : "No rows");
+    const count = { duplicates: D.duplicates, unresolved: D.unresolved, minutes: D.minutes, priority_labels: D.priority_labels, category_labels: D.category_labels, month_formats: D.month_formats };
+    $("checks").innerHTML = CHECK_IDS.map((id) => {
+      const p = M.pfById[id] || { check: id }, rows = count[id], on = S.checks[id];
+      let extraTxt = "";
+      if (id === "minutes" && D.minutesSuspect.length) extraTxt = '<p class="found">Also looks like minutes but is not confirmed, so it is scored as hours: export row' + (D.minutesSuspect.length > 1 ? "s " : " ") + D.minutesSuspect.join(", ") + ".</p>";
+      if (id === "priority_labels" && D.priUnmapped.length) extraTxt = '<p class="found">No alias yet for export row' + (D.priUnmapped.length > 1 ? "s " : " ") + D.priUnmapped.join(", ") + ", so " + (D.priUnmapped.length > 1 ? "they stay" : "it stays") + " flagged.</p>";
+      if (id === "category_labels" && D.catUnmapped.length) extraTxt = '<p class="found">No alias yet for export row' + (D.catUnmapped.length > 1 ? "s " : " ") + D.catUnmapped.join(", ") + ", so " + (D.catUnmapped.length > 1 ? "they stay" : "it stays") + " flagged.</p>";
+      if (id === "month_formats" && D.monBad.length) extraTxt = '<p class="found">Unreadable in any format: export row' + (D.monBad.length > 1 ? "s " : " ") + D.monBad.join(", ") + ".</p>";
+      return '<div class="check' + (on ? "" : " off") + '"><span class="stripe" aria-hidden="true"></span><div class="body"><div class="top"><strong>' + esc(p.check) + ' <span class="pill ' + (rows.length ? "warn" : "muted") + '">' + plural(rows.length, "row") + "</span></strong>" +
+        '<label class="switch"><input type="checkbox" data-check="' + id + '"' + (on ? " checked" : "") + '> Apply</label></div>' +
+        (p.context ? '<p class="found">' + esc(p.context) + "</p>" : "") + '<p class="handled">' + esc(p.handled || "") + (p.confirmed_by ? " Confirmed by: " + esc(p.confirmed_by) + "." : "") + "</p>" + extraTxt +
+        '<p class="rows">' + rowsTxt(rows) + "</p></div></div>";
+    }).join("");
+    const names = [...new Set([...M.can.categories, ...raw.cats.map((a) => a.name), ...R.cats.map((a) => a.name)])];
+    const nowBy = new Map(R.cats.map((a) => [a.name, a]));
+    const cell = (a) => (a ? pct(a.att) + '<span class="sub">' + plural(a.n, "ticket") + "</span>" : "—");
+    $("pf-table").innerHTML = "<caption class='sr'>Each category scored as received and with the current checks</caption><thead><tr><th scope='col'>Category</th><th scope='col' class='num'>As received</th><th scope='col'>Status</th><th scope='col' class='num'>With these checks</th><th scope='col'>Status</th></tr></thead><tbody>" +
+      names.map((n) => { const a = rawBy.get(n), b = nowBy.get(n), changed = a && b && a.status !== b.status;
+        return "<tr" + (changed ? ' class="changed"' : "") + '><th scope="row">' + esc(n) + (canonCats.has(n) ? "" : '<span class="sub">Old label, not in the category list</span>') + (changed ? '<span class="sr"> (status changes)</span>' : "") + '</th><td class="num">' + cell(a) + '</td><td class="status-cell">' + (a ? pill(a) : "") + '</td><td class="num">' + cell(b) + '</td><td class="status-cell">' + (b ? pill(b) : '<span class="pill muted">Merged</span>') + "</td></tr>"; }).join("") + "</tbody>";
+  }
+
+  function renderMeta(R) {
+    $("meta").innerHTML = [["Period", M.meta.period], ["Rows received", int(M.tickets.length)], ["Scored", int(R.all.n)], ["Categories", M.can.categories.length], ["Steward", M.meta.steward], ["As of", M.meta.as_of]]
+      .filter(([, v]) => v != null && v !== "").map(([k, v]) => "<span>" + esc(k) + " <b>" + esc(v) + "</b></span>").join("");
+  }
+  function renderAll() { syncControls(); const R = score(M, S, S.checks, D); renderMeta(R); renderHealth(R); renderCuts(R); renderTrend(R); renderPreflight(R); }
+
+  // ---- Tabs, source, events ---------------------------------------------
+  const TABS = ["health", "cuts", "trend", "preflight"];
+  const openSource = () => { const d = $("source"); d.open = true; d.scrollIntoView({ block: "start" }); };
+  function show(view, focus) {
+    if (view === "source") { openSource(); view = TABS.find((t) => !$(t).hidden) || "health"; }
+    if (!TABS.includes(view)) view = "health";
+    TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  }
+  // Keep the tab in the address bar where allowed; sandboxed frames and embeds block it, and the tabs work without it.
+  const setHash = (v) => { try { history.replaceState(null, "", "#" + v); } catch (e) { /* not allowed here */ } };
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { setHash(b.dataset.view); show(b.dataset.view); } });
+  document.querySelector(".tabs").addEventListener("keydown", (e) => {
+    const i = TABS.indexOf(document.activeElement.dataset.view); if (i < 0) return;
+    const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+    if (j >= 0) { e.preventDefault(); setHash(TABS[j]); show(TABS[j], true); }
+  });
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  // Links to #source open the drawer directly, so they work even where the address bar is blocked.
+  document.addEventListener("click", (e) => { const a = e.target.closest('a[href="#source"]'); if (!a) return; e.preventDefault(); setHash("source"); openSource(); $("source").querySelector("summary").focus(); });
+
+  $("sliders").addEventListener("input", (e) => {
+    const k = e.target.dataset.k; if (!k) return;
+    let v = parseFloat(e.target.value);
+    if (k === "watch") v = Math.min(v, S.on_target - 0.01);
+    if (k === "on_target") { v = Math.max(v, 0.71); if (S.watch >= v) S.watch = Math.round((v - 0.01) * 100) / 100; }
+    S[k] = Math.round(v * 100) / 100; renderAll();
+  });
+  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; Object.assign(S, PRESETS().find((p) => p.id === b.dataset.preset).set); renderAll(); });
+  $("checks").addEventListener("change", (e) => { const id = e.target.dataset.check; if (!id) return; S.checks[id] = e.target.checked; renderAll(); const el = document.querySelector('[data-check="' + id + '"]'); if (el) el.focus(); });
+  $("cat-table").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort]"); if (!b) return; const k = b.dataset.sort;
+    if (catSort === k) catDir = -catDir; else { catSort = k; catDir = k === "name" || k === "att" || k === "status" ? 1 : -1; }
+    renderAll(); const nb = document.querySelector('#cat-table [data-sort="' + k + '"]'); if (nb) nb.focus();
+  });
+
+  const status = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
+  const load = (text) => { const next = build(text); M = next; D = detect(M); S = cloneS(M.defaults); renderControls(); renderAll(); };
+  $("apply").addEventListener("click", () => { try { load($("yaml-src").value); status("Applied. " + M.tickets.length + " rows. Every view now reflects your edits, and the bands and checks reset to the file's settings.", "ok"); } catch (err) { status("Not applied. " + err.message, "err"); } });
+  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; load(ORIGINAL); status("Reset to the original source.", "ok"); });
+  $("copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("yaml-src").value); status("Copied to the clipboard.", "ok"); } catch (e) { $("yaml-src").select(); status("Select all and copy with your keyboard; this browser blocked clipboard access.", ""); } });
+
+  $("yaml-src").value = ORIGINAL;
+  try { load(ORIGINAL); } catch (err) { $("health-narrative").textContent = err.message; }
+  show(location.hash.slice(1) || "health");
+})();
+</script>
+</body>
+</html>

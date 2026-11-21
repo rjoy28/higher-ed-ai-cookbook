@@ -1,0 +1,316 @@
+# RCU IT Service Health: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It holds the help-desk
+# export exactly as received, the pre-flight decisions a person confirmed, and
+# the SLA bands. Every view is computed from it.
+#
+# Schema
+#   meta        institution, period, steward, as_of
+#   settings    on_target and watch: SLA attainment bands (recipe 02 defaults 0.90 / 0.80)
+#               checks: which pre-flight steps to apply (true = apply)
+#   canonical   the category, priority, and team lists the analysis expects
+#   aliases     old or variant labels -> canonical label. Mapped only when the
+#               category or priority check is on. Unlisted variants stay flagged.
+#   preflight   one entry per check: what a person found and confirmed. Counts and
+#               row numbers on the page are computed from the export, not copied.
+#               minutes.rows lists the rows a person confirmed were logged in minutes;
+#               the page also flags any other row more than 40 times its category's
+#               median time, but converts only confirmed rows.
+#   tickets     the export as received: [row, category, priority, month, SLA target
+#               (hrs), resolution (hrs), the export's own In SLA? flag, assigned team].
+#               row is the row number in the export file.
+#
+# Rules the page applies
+#   in SLA          resolution <= SLA target, recomputed (the export's flag is not trusted)
+#   attainment      tickets in SLA / tickets, for each cut
+#   status          On target >= on_target; Watch >= watch; Below target otherwise
+#   short of target tickets that would have to move inside SLA for a cut to reach
+#                   on_target: ceil(on_target x tickets) - tickets in SLA, never below 0
+#   duplicates      a row identical to an earlier row in every field but row number
+#   unresolved      no resolution time; with the check off they count as missed
+#   month formats   "May 2026" and "06/2026" become 2026-05 and 2026-06; with the check
+#                   off, unreadable months drop out of the trend only
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-07-02"
+  period: January to June 2026
+  steward: IT Service Desk
+  fixture: true
+
+settings:
+  on_target: 0.90
+  watch: 0.80
+  checks: {duplicates: true, unresolved: true, minutes: true, priority_labels: true, category_labels: true, month_formats: true}
+
+canonical:
+  categories: [AV / Classroom Tech, Account/Access, Data/Reporting, ERP, Email & Collaboration, Hardware, LMS, Network/Wi-Fi, Phone/VoIP, Printing, Security/Phishing, Software Install]
+  priorities: [P1, P2, P3, P4]
+  teams: [AV Services, Data Services, Enterprise Apps, Help Desk, Infrastructure, Security]
+
+aliases:
+  categories: {"Email & Collab": Email & Collaboration, "Wi-Fi / Network": Network/Wi-Fi}
+  priorities: {"Priority 3": P3, "p4": P4, "Critical": P1}
+
+preflight:
+  - id: duplicates
+    check: Duplicate rows
+    context: All are LMS tickets from the night the online learning system went offline, logged once by phone and again by email.
+    handled: The help-desk lead confirmed they were double-logged. One copy of each was kept.
+    confirmed_by: Help-desk lead
+  - id: unresolved
+    check: Unresolved tickets
+    context: Still open when the export ran. One also has no assigned team.
+    handled: Set aside. Open tickets can't be scored against SLA yet; they will appear in next month's export.
+    confirmed_by: Help-desk lead
+  - id: minutes
+    check: Mixed units
+    context: These came from the phone-intake form, which records minutes instead of hours.
+    handled: Converted from minutes to hours, only after confirmation, and In SLA recomputed. The export's own flag was computed on minutes.
+    confirmed_by: Help-desk lead
+    rows: [28, 77, 102]
+  - id: priority_labels
+    check: Priority labels
+    context: "'Critical' is the old phone-intake label for P1. The others are typing variants."
+    handled: Mapped to P1 to P4 through the alias list.
+    confirmed_by: Help-desk lead
+  - id: category_labels
+    check: Category labels
+    context: Older category names, from before the catalog was renamed.
+    handled: Matched to the current category list through the alias list. Nothing renamed silently.
+    confirmed_by: Help-desk lead
+  - id: month_formats
+    check: Month formats
+    context: A few rows write the month as words or as MM/YYYY.
+    handled: Normalized to YYYY-MM so months compare like for like.
+    confirmed_by: Automatic, format only
+
+tickets:
+  - [6, "Email & Collaboration", "P1", "2026-06", 4, 4.8, "No", "Infrastructure"]
+  - [7, "Phone/VoIP", "P3", "2026-04", 24, 39.7, "No", "Infrastructure"]
+  - [8, "AV / Classroom Tech", "P4", "2026-03", 72, 166.4, "No", "Security"]
+  - [9, "Account/Access", "Priority 3", "2026-05", 24, 30.1, "No", "Infrastructure"]
+  - [10, "Hardware", "P2", "2026-01", 8, 2.3, "Yes", "Security"]
+  - [11, "Wi-Fi / Network", "P4", "2026-02", 72, 17.5, "Yes", "AV Services"]
+  - [12, "Hardware", "P4", "2026-01", 72, 53.8, "Yes", "Help Desk"]
+  - [13, "Account/Access", "P3", "2026-02", 24, 32.2, "No", "AV Services"]
+  - [14, "Phone/VoIP", "P4", "2026-05", 72, 61.3, "Yes", "Data Services"]
+  - [15, "LMS", "P3", "2026-04", 24, 9.6, "Yes", "Help Desk"]
+  - [16, "Hardware", "Priority 3", "2026-01", 24, 5.8, "Yes", "Help Desk"]
+  - [17, "Software Install", "P4", "2026-04", 72, 60, "Yes", "Infrastructure"]
+  - [18, "LMS", "P4", "2026-02", 72, 47.9, "Yes", "Enterprise Apps"]
+  - [19, "ERP", "P4", "2026-03", 72, 45.6, "Yes", "AV Services"]
+  - [20, "Account/Access", "P4", "2026-02", 72, 30.1, "Yes", "Enterprise Apps"]
+  - [21, "Network/Wi-Fi", "P2", "2026-06", 8, 2.4, "Yes", "Help Desk"]
+  - [22, "Hardware", "P3", "May 2026", 24, 18.3, "Yes", "Enterprise Apps"]
+  - [23, "Account/Access", "P2", "2026-03", 8, 7.1, "Yes", "Help Desk"]
+  - [24, "Email & Collaboration", "P3", "2026-03", 24, 9.7, "Yes", "Security"]
+  - [25, "Email & Collaboration", "P3", "2026-05", 24, 15.5, "Yes", "Help Desk"]
+  - [26, "Phone/VoIP", "P4", "2026-05", 72, 48.2, "Yes", "Data Services"]
+  - [27, "Wi-Fi / Network", "P3", "2026-01", 24, 48.8, "No", "Data Services"]
+  - [28, "Email & Collaboration", "P4", "2026-03", 72, 1608, "No", "AV Services"]
+  - [29, "Data/Reporting", "P3", "2026-02", 24, 20.3, "Yes", "Data Services"]
+  - [30, "Data/Reporting", "p4", "2026-06", 72, 35.7, "Yes", "Help Desk"]
+  - [31, "Hardware", "P3", "2026-04", 24, 7.3, "Yes", "AV Services"]
+  - [32, "AV / Classroom Tech", "P3", "May 2026", 24, 20.8, "Yes", "Data Services"]
+  - [33, "LMS", "P3", "2026-03", 24, 13.6, "Yes", "Help Desk"]
+  - [34, "Network/Wi-Fi", "P3", "2026-02", 24, 1.5, "Yes", "AV Services"]
+  - [35, "Security/Phishing", "P4", "2026-01", 72, 41, "Yes", "Infrastructure"]
+  - [36, "Data/Reporting", "P3", "2026-05", 24, 14.3, "Yes", "Help Desk"]
+  - [37, "Email & Collaboration", "p4", "2026-02", 72, 45.2, "Yes", "AV Services"]
+  - [38, "Account/Access", "P3", "2026-02", 24, 10.3, "Yes", "Security"]
+  - [39, "Phone/VoIP", "P3", "2026-04", 24, 19.3, "Yes", "AV Services"]
+  - [40, "Phone/VoIP", "P3", "2026-02", 24, 42.6, "No", "Infrastructure"]
+  - [41, "Printing", "P3", "2026-05", 24, 6.3, "Yes", "Help Desk"]
+  - [42, "Data/Reporting", "P3", "2026-03", 24, 11.9, "Yes", "Infrastructure"]
+  - [43, "LMS", "P2", "2026-02", 8, 3.3, "Yes", "Enterprise Apps"]
+  - [44, "Phone/VoIP", "P3", "2026-01", 24, 40.4, "No", "Security"]
+  - [45, "Data/Reporting", "P1", "2026-05", 4, 3.4, "Yes", "Enterprise Apps"]
+  - [46, "ERP", "P4", "2026-04", 72, 35.6, "Yes", "Security"]
+  - [47, "Network/Wi-Fi", "P3", "2026-03", 24, 8.7, "Yes", "Data Services"]
+  - [48, "Printing", "P4", "2026-02", 72, 185.1, "No", "Security"]
+  - [49, "Account/Access", "P4", "2026-06", 72, 5.9, "Yes", "AV Services"]
+  - [50, "LMS", "P4", "2026-02", 72, 21.5, "Yes", "AV Services"]
+  - [51, "Software Install", "P3", "2026-04", 24, 18.1, "Yes", "Enterprise Apps"]
+  - [52, "Email & Collaboration", "P3", "May 2026", 24, 39, "No", "Data Services"]
+  - [53, "Email & Collab", "P4", "2026-06", 72, 61.6, "Yes", "Infrastructure"]
+  - [54, "Account/Access", "P3", "2026-03", 24, 2.9, "Yes", "Infrastructure"]
+  - [55, "AV / Classroom Tech", "P3", "2026-04", 24, 20.8, "Yes", "Data Services"]
+  - [56, "Email & Collab", "P4", "2026-02", 72, 2.2, "Yes", "Enterprise Apps"]
+  - [57, "Security/Phishing", "P3", "2026-04", 24, 33.5, "No", "Security"]
+  - [58, "Data/Reporting", "P4", "2026-03", 72, 19.9, "Yes", "Data Services"]
+  - [59, "Security/Phishing", "P4", "2026-05", 72, 28, "Yes", "Enterprise Apps"]
+  - [60, "Email & Collab", "P3", "2026-03", 24, 56, "No", "Help Desk"]
+  - [61, "ERP", "P4", "2026-06", 72, 28.5, "Yes", "Data Services"]
+  - [62, "Phone/VoIP", "P4", "2026-03", 72, 35.1, "Yes", "AV Services"]
+  - [63, "AV / Classroom Tech", "P3", "2026-06", 24, 5.7, "Yes", "Help Desk"]
+  - [64, "Hardware", "P4", "2026-03", 72, 43.5, "Yes", "Enterprise Apps"]
+  - [65, "Account/Access", "P3", "2026-03", 24, 8, "Yes", "Enterprise Apps"]
+  - [66, "Software Install", "P3", "2026-06", 24, 46.4, "No", "Security"]
+  - [67, "Network/Wi-Fi", "P2", "2026-04", 8, 2.1, "Yes", "AV Services"]
+  - [68, "Printing", "P4", "2026-04", 72, 14.7, "Yes", "Data Services"]
+  - [69, "Network/Wi-Fi", "P3", "2026-05", 24, 11.7, "Yes", "AV Services"]
+  - [70, "Data/Reporting", "P3", "2026-04", 24, 7, "Yes", "Infrastructure"]
+  - [71, "Email & Collaboration", "P4", "2026-03", 72, 61.6, "Yes", "Data Services"]
+  - [72, "LMS", "P2", "2026-05", 8, 7, "Yes", "Security"]
+  - [73, "LMS", "P2", "2026-05", 8, 7, "Yes", "Security"]
+  - [74, "Security/Phishing", "P3", "2026-01", 24, 8.1, "Yes", "Enterprise Apps"]
+  - [75, "Account/Access", "P4", "2026-02", 72, 4, "Yes", "Enterprise Apps"]
+  - [76, "Data/Reporting", "P4", "2026-06", 72, 1.3, "Yes", "Enterprise Apps"]
+  - [77, "AV / Classroom Tech", "P3", "2026-03", 24, 2130, "No", "AV Services"]
+  - [78, "Email & Collaboration", "P4", "2026-04", 72, 41, "Yes", "Help Desk"]
+  - [79, "LMS", "P2", "2026-05", 8, 2.2, "Yes", "Security"]
+  - [80, "LMS", "P2", "2026-05", 8, 2.2, "Yes", "Security"]
+  - [81, "ERP", "P3", "2026-06", 24, 8.5, "Yes", "AV Services"]
+  - [82, "Hardware", "P4", "2026-04", 72, 4.4, "Yes", "Data Services"]
+  - [83, "Email & Collaboration", "P4", "2026-02", 72, 43, "Yes", "Infrastructure"]
+  - [84, "Network/Wi-Fi", "P2", "2026-01", 8, 3.5, "Yes", "Security"]
+  - [85, "AV / Classroom Tech", "P3", "2026-03", 24, 15.3, "Yes", "AV Services"]
+  - [86, "Email & Collaboration", "P3", "2026-03", 24, 17.5, "Yes", "Infrastructure"]
+  - [87, "ERP", "P2", "2026-02", 8, 2.3, "Yes", "Infrastructure"]
+  - [88, "Email & Collaboration", "Critical", "2026-03", 4, 2.3, "Yes", "Enterprise Apps"]
+  - [89, "AV / Classroom Tech", "P2", "2026-03", 8, 2.3, "Yes", "Security"]
+  - [90, "AV / Classroom Tech", "P3", "2026-06", 24, 52.8, "No", "Security"]
+  - [91, "Hardware", "P1", "2026-03", 4, 7.9, "No", "Help Desk"]
+  - [92, "Printing", "P4", "2026-05", 72, 11.8, "Yes", "Security"]
+  - [93, "Printing", "P3", "2026-03", 24, 42.1, "No", "AV Services"]
+  - [94, "Email & Collaboration", "P3", "2026-04", 24, 2.7, "Yes", "Infrastructure"]
+  - [95, "Software Install", "P3", "2026-05", 24, 8.9, "Yes", "Security"]
+  - [96, "Account/Access", "P3", "2026-03", 24, 21, "Yes", "AV Services"]
+  - [97, "Phone/VoIP", "P4", "2026-01", 72, 129.1, "No", "Help Desk"]
+  - [98, "Network/Wi-Fi", "P3", "2026-06", 24, 16.5, "Yes", "Infrastructure"]
+  - [99, "Hardware", "P3", "2026-03", 24, 43.8, "No", "Help Desk"]
+  - [100, "Printing", "P3", "2026-03", 24, 12.1, "Yes", "Security"]
+  - [101, "ERP", "P2", "2026-01", 8, 16.6, "No", "Infrastructure"]
+  - [102, "AV / Classroom Tech", "P4", "2026-03", 72, 1632, "No", "AV Services"]
+  - [103, "AV / Classroom Tech", "P3", "2026-05", 24, 20, "Yes", "Security"]
+  - [104, "Data/Reporting", "P4", "2026-01", 72, 55.4, "Yes", "Enterprise Apps"]
+  - [105, "Phone/VoIP", "P3", "2026-01", 24, 18.2, "Yes", "Security"]
+  - [106, "Printing", "P3", "2026-02", 24, 7.8, "Yes", "Security"]
+  - [107, "Phone/VoIP", "P3", "2026-03", 24, 35, "No", "AV Services"]
+  - [108, "Network/Wi-Fi", "P4", "2026-04", 72, 30.9, "Yes", "AV Services"]
+  - [109, "ERP", "P4", "06/2026", 72, 2.9, "Yes", "Security"]
+  - [110, "Security/Phishing", "P3", "2026-01", 24, 19.7, "Yes", "Help Desk"]
+  - [111, "Data/Reporting", "P2", "2026-06", 8, 5.7, "Yes", "Enterprise Apps"]
+  - [112, "Software Install", "P3", "2026-04", 24, 7.4, "Yes", "Data Services"]
+  - [113, "Phone/VoIP", "P3", "2026-03", 24, 16.5, "Yes", "Security"]
+  - [114, "Account/Access", "P3", "2026-03", 24, 6.6, "Yes", "Infrastructure"]
+  - [115, "Data/Reporting", "P2", "2026-01", 8, 1.2, "Yes", "Infrastructure"]
+  - [116, "Data/Reporting", "P3", "2026-01", 24, 1.7, "Yes", "Enterprise Apps"]
+  - [117, "Software Install", "P3", "2026-03", 24, 14.9, "Yes", "Infrastructure"]
+  - [118, "LMS", "P2", "2026-06", 8, 2.1, "Yes", "Security"]
+  - [119, "LMS", "P2", "2026-06", 8, 5, "Yes", "AV Services"]
+  - [120, "Hardware", "P3", "2026-02", 24, 7.8, "Yes", "Security"]
+  - [121, "Hardware", "P3", "2026-04", 24, 18.3, "Yes", "Infrastructure"]
+  - [122, "ERP", "P4", "2026-01", 72, 23.6, "Yes", "Enterprise Apps"]
+  - [123, "Data/Reporting", "P3", "2026-06", 24, 12.4, "Yes", "Data Services"]
+  - [124, "Data/Reporting", "P4", "2026-06", 72, 58.6, "Yes", "Enterprise Apps"]
+  - [125, "Network/Wi-Fi", "P3", "2026-04", 24, 13.6, "Yes", "Data Services"]
+  - [126, "Data/Reporting", "P4", "2026-06", 72, 58.6, "Yes", "Data Services"]
+  - [127, "Account/Access", "P3", "2026-04", 24, 16, "Yes", "Help Desk"]
+  - [128, "Hardware", "P3", "2026-04", 24, 17.1, "Yes", "Enterprise Apps"]
+  - [129, "Phone/VoIP", "P3", "2026-03", 24, 17.9, "Yes", "AV Services"]
+  - [130, "Hardware", "P4", "2026-03", 72, 5.3, "Yes", "Infrastructure"]
+  - [131, "Printing", "P4", "2026-04", 72, 51.3, "Yes", "Help Desk"]
+  - [132, "Hardware", "P3", "2026-04", 24, 14.7, "Yes", "Security"]
+  - [133, "ERP", "P4", "2026-04", 72, 30.8, "Yes", "Security"]
+  - [134, "Phone/VoIP", "P3", "2026-06", 24, 13.9, "Yes", "AV Services"]
+  - [135, "Data/Reporting", "P3", "2026-04", 24, 20.5, "Yes", "Enterprise Apps"]
+  - [136, "AV / Classroom Tech", "P2", "2026-03", 8, 3.5, "Yes", "Data Services"]
+  - [137, "Data/Reporting", "P3", "2026-05", 24, 15.8, "Yes", "AV Services"]
+  - [138, "Printing", "P2", "2026-05", 8, 6.9, "Yes", "Help Desk"]
+  - [139, "Data/Reporting", "P3", "2026-04", 24, 57.2, "No", "Help Desk"]
+  - [140, "Printing", "P3", "2026-06", 24, 6.3, "Yes", "Help Desk"]
+  - [141, "AV / Classroom Tech", "P2", "2026-02", 8, 7, "Yes", "Help Desk"]
+  - [142, "Software Install", "P3", "2026-02", 24, 18, "Yes", "Security"]
+  - [143, "Network/Wi-Fi", "P3", "2026-03", 24, 17.1, "Yes", "Security"]
+  - [144, "Account/Access", "P3", "2026-02", 24, 17.3, "Yes", "Help Desk"]
+  - [145, "Printing", "P4", "2026-02", 72, 51.2, "Yes", "Security"]
+  - [146, "Software Install", "P1", "2026-03", 4, 1.8, "Yes", "Help Desk"]
+  - [147, "Data/Reporting", "P2", "2026-04", 8, 1.2, "Yes", "Security"]
+  - [148, "Network/Wi-Fi", "P4", "2026-01", 72, 56.2, "Yes", "Security"]
+  - [149, "Hardware", "P3", "2026-01", 24, 56.9, "No", "AV Services"]
+  - [150, "Printing", "P2", "2026-04", 8, 12.7, "No", "Infrastructure"]
+  - [151, "Email & Collaboration", "P2", "2026-06", 8, 5.3, "Yes", "AV Services"]
+  - [152, "Security/Phishing", "P3", "2026-04", 24, 2.6, "Yes", "Data Services"]
+  - [153, "Email & Collaboration", "P4", "2026-06", 72, 14.3, "Yes", "AV Services"]
+  - [154, "Network/Wi-Fi", "P3", "2026-04", 24, 2.5, "Yes", "AV Services"]
+  - [155, "Software Install", "P3", "2026-04", 24, 10.5, "Yes", "Help Desk"]
+  - [156, "Email & Collaboration", "P2", "2026-01", 8, 5.9, "Yes", "Security"]
+  - [157, "Account/Access", "P3", "2026-05", 24, 3.1, "Yes", "Enterprise Apps"]
+  - [158, "Printing", "P4", "2026-04", 72, 19, "Yes", "Enterprise Apps"]
+  - [159, "Software Install", "P2", "2026-05", 8, 3.7, "Yes", "Help Desk"]
+  - [160, "Software Install", "P4", "2026-04", 72, 37.4, "Yes", "AV Services"]
+  - [161, "Phone/VoIP", "P4", "2026-06", 72, 36.3, "Yes", "Security"]
+  - [162, "Printing", "P4", "2026-03", 72, 45.7, "Yes", "Enterprise Apps"]
+  - [163, "Software Install", "P3", "2026-02", 24, 9, "Yes", "Infrastructure"]
+  - [164, "Data/Reporting", "P3", "2026-01", 24, 5, "Yes", "AV Services"]
+  - [165, "AV / Classroom Tech", "P3", "2026-04", 24, 16.9, "Yes", "Security"]
+  - [166, "Security/Phishing", "P2", "2026-01", 8, 4.6, "Yes", "Data Services"]
+  - [167, "Email & Collaboration", "P3", "2026-06", 24, 9.8, "Yes", "Enterprise Apps"]
+  - [168, "Network/Wi-Fi", "P4", "2026-01", 72, 18.7, "Yes", "Data Services"]
+  - [169, "Security/Phishing", "P3", "2026-06", 24, 8.8, "Yes", "Security"]
+  - [170, "Account/Access", "P1", "2026-03", 4, 2.9, "Yes", "Enterprise Apps"]
+  - [171, "Software Install", "P2", "2026-05", 8, 1.4, "Yes", "Security"]
+  - [172, "Data/Reporting", "P2", "2026-05", 8, 1, "Yes", "Data Services"]
+  - [173, "Account/Access", "P3", "2026-04", 24, 47.1, "No", "Security"]
+  - [174, "ERP", "P4", "2026-04", 72, 1.8, "Yes", "Enterprise Apps"]
+  - [175, "LMS", "P4", "2026-06", 72, 178.5, "No", "Help Desk"]
+  - [176, "ERP", "P4", "2026-03", 72, 34.2, "Yes", "AV Services"]
+  - [177, "Hardware", "P4", "2026-02", 72, 5.4, "Yes", "Data Services"]
+  - [178, "Email & Collaboration", "P3", "2026-02", 24, 20.7, "Yes", "Data Services"]
+  - [179, "LMS", "P2", "2026-02", 8, 4.5, "Yes", "Data Services"]
+  - [180, "Email & Collaboration", "P2", "2026-06", 8, 4.3, "Yes", "Security"]
+  - [181, "AV / Classroom Tech", "P3", "2026-05", 24, 13.7, "Yes", "Data Services"]
+  - [182, "Software Install", "P2", "2026-01", 8, 2.5, "Yes", "Enterprise Apps"]
+  - [183, "Security/Phishing", "P1", "2026-05", 4, 1.9, "Yes", "Help Desk"]
+  - [184, "Software Install", "P4", "2026-01", 72, 171.6, "No", "Security"]
+  - [185, "Security/Phishing", "P3", "2026-04", 24, 17.2, "Yes", "Help Desk"]
+  - [186, "AV / Classroom Tech", "P4", "2026-05", 72, 39.4, "Yes", "Security"]
+  - [187, "LMS", "P4", "2026-04", 72, 54.3, "Yes", "Data Services"]
+  - [188, "Email & Collaboration", "P3", "2026-02", 24, 9.7, "Yes", "AV Services"]
+  - [189, "Phone/VoIP", "P3", "2026-02", 24, 6.5, "Yes", "AV Services"]
+  - [190, "Software Install", "P3", "2026-01", 24, 1.9, "Yes", "Help Desk"]
+  - [191, "Phone/VoIP", "P3", "2026-03", 24, 14.4, "Yes", "Security"]
+  - [192, "LMS", "P3", "2026-05", 24, 7.9, "Yes", "Data Services"]
+  - [193, "LMS", "P3", "2026-05", 24, 7.9, "Yes", "Data Services"]
+  - [194, "Data/Reporting", "P3", "2026-02", 24, 2.3, "Yes", "Security"]
+  - [195, "ERP", "P3", "2026-03", 24, 18, "Yes", "Data Services"]
+  - [196, "Printing", "P4", "2026-01", 72, 33.2, "Yes", "Help Desk"]
+  - [197, "Software Install", "P3", "2026-02", 24, 43.9, "No", "Infrastructure"]
+  - [198, "LMS", "P2", "2026-03", 8, 4.1, "Yes", "Data Services"]
+  - [199, "Phone/VoIP", "P1", "2026-03", 4, 1.7, "Yes", "Infrastructure"]
+  - [200, "LMS", "P4", "2026-06", 72, 3.3, "Yes", "Enterprise Apps"]
+  - [201, "Printing", "P4", "2026-04", 72, 48.6, "Yes", "AV Services"]
+  - [202, "Network/Wi-Fi", "P3", "2026-03", 24, 33.4, "No", "Data Services"]
+  - [203, "Security/Phishing", "P4", "2026-04", 72, 32.8, "Yes", "AV Services"]
+  - [204, "LMS", "P4", "2026-06", 72, 84.8, "No", "AV Services"]
+  - [205, "Software Install", "P3", "2026-01", 24, 57, "No", "Enterprise Apps"]
+  - [206, "Email & Collaboration", "P4", "2026-03", 72, 95.1, "No", "AV Services"]
+  - [207, "Email & Collaboration", "P4", "2026-02", 72, 179.7, "No", "AV Services"]
+  - [208, "Account/Access", "P3", "2026-04", 24, 2.2, "Yes", "Infrastructure"]
+  - [209, "Account/Access", "P3", "2026-01", 24, 17.2, "Yes", "Infrastructure"]
+  - [210, "Account/Access", "P3", "2026-05", 24, 53.7, "No", "AV Services"]
+  - [211, "AV / Classroom Tech", "P3", "2026-01", 24, 18.1, "Yes", "Security"]
+  - [212, "Data/Reporting", "P3", "2026-04", 24, 5.5, "Yes", "Help Desk"]
+  - [213, "Account/Access", "P2", "2026-06", 8, 1.2, "Yes", "AV Services"]
+  - [214, "Security/Phishing", "P3", "2026-06", 24, 15.7, "Yes", "Enterprise Apps"]
+  - [215, "ERP", "P1", "2026-04", 4, 1.1, "Yes", "Data Services"]
+  - [216, "Email & Collaboration", "P3", "2026-04", 24, 46, "No", "Security"]
+  - [217, "Phone/VoIP", "P1", "2026-05", 4, 3.5, "Yes", "Enterprise Apps"]
+  - [218, "Account/Access", "P3", "2026-06", 24, null, null, null]
+  - [219, "Data/Reporting", "P1", "2026-01", 4, 2.5, "Yes", "Help Desk"]
+  - [220, "Security/Phishing", "P4", "2026-03", 72, 35.6, "Yes", "Data Services"]
+  - [221, "LMS", "P4", "2026-06", 72, 130.9, "No", "Infrastructure"]
+  - [222, "LMS", "P2", "2026-04", 8, 0.8, "Yes", "Infrastructure"]
+  - [223, "Account/Access", "P3", "2026-03", 24, 17.7, "Yes", "AV Services"]
+  - [224, "LMS", "P2", "2026-06", 8, null, null, "Enterprise Apps"]
+  - [225, "Printing", "P4", "2026-06", 72, null, null, "Help Desk"]
+  - [226, "Hardware", "P1", "2026-06", 4, 3.2, "Yes", "Help Desk"]
+  - [227, "Printing", "P3", "2026-02", 24, 8.9, "Yes", "AV Services"]
+  - [228, "ERP", "P3", "2026-02", 24, 8.3, "Yes", "Security"]
+  - [229, "Hardware", "P4", "2026-04", 72, 64.5, "Yes", "Infrastructure"]
+  - [230, "Phone/VoIP", "P3", "2026-01", 24, 6.7, "Yes", "AV Services"]
+  - [231, "Security/Phishing", "P4", "2026-02", 72, 29.3, "Yes", "Data Services"]

@@ -759,6 +759,8 @@ programs:
     if (j >= 0) { e.preventDefault(); setHash(TABS[j]); show(TABS[j], true); }
   });
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  // Links to #source open the drawer directly, so they work even where the address bar is blocked.
+  document.addEventListener("click", (e) => { const a = e.target.closest('a[href="#source"]'); if (!a) return; e.preventDefault(); setHash("source"); openSource(); $("source").querySelector("summary").focus(); });
 
   $("sliders").addEventListener("input", (e) => {
     const k = e.target.dataset.k; if (!k) return;
