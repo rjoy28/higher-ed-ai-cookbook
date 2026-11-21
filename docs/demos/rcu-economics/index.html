@@ -1119,11 +1119,13 @@ programs:
     if (!TABS.includes(view)) view = "revenue";
     TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
   }
-  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { history.replaceState(null, "", "#" + b.dataset.view); show(b.dataset.view); } });
+  // Keep the tab in the address bar where allowed; sandboxed frames and embeds block it, and the tabs work without it.
+  const setHash = (v) => { try { history.replaceState(null, "", "#" + v); } catch (e) { /* not allowed here */ } };
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { setHash(b.dataset.view); show(b.dataset.view); } });
   document.querySelector(".tabs").addEventListener("keydown", (e) => {
     const i = TABS.indexOf(document.activeElement.dataset.view); if (i < 0) return;
     const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
-    if (j >= 0) { e.preventDefault(); history.replaceState(null, "", "#" + TABS[j]); show(TABS[j], true); }
+    if (j >= 0) { e.preventDefault(); setHash(TABS[j]); show(TABS[j], true); }
   });
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
 
