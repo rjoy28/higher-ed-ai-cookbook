@@ -15,7 +15,7 @@ Three recipe inputs that usually sit apart, joined in one YAML file: program enr
 - **Teaching load.** Each program's share of enrolled seats in this term's sections, set against its share of net tuition. Chemistry teaches 5.3% of seats and brings in 1.5% of revenue, which is the usual pattern for a service department.
 - **Gaps in the join.** The section export joins to 35 of 44 programs. Seven of the ten graduate programs have no sections on record. The subject map carries its own notes, for example that MAT means Mathematics in the schedule but the Master of Arts in Teaching in the catalog.
 - **Discount scenario.** Set a discount rate and an enrollment response, and see the effect on net tuition. RCU's 52% goal is a blended rate: with graduate aid held, the undergraduate rate only has to fall from 65.0% to 58.1%. That adds $3.44M a year if headcount holds, and the cut still comes out ahead unless more than 16.5% of undergraduates (270 students) leave. The break-even figure comes from the rates alone, so it needs no guess about enrollment.
-- **Source.** Edit the YAML on the page and every view redraws. If program headcounts stop adding up to the aid summary, the page says so.
+- **Behind the page.** Open the Source file drawer below the views, edit the YAML, and every view redraws. Build notes live there too, so the views hold only findings ([content first, machinery behind](../../patterns/content-first.md)). If program headcounts stop adding up to the aid summary, the page says so.
 
 ## The rules are settings
 

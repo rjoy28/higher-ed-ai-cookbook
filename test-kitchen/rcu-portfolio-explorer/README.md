@@ -13,7 +13,7 @@ Five years of program enrollment at a fictional university, in one YAML file. A 
 - **Scorecard.** Every program plotted by headcount and growth rate, with the Stable band and tier lines drawn in. Move a threshold and the programs reclassify. A list shows which programs changed label or tier compared with the recipe defaults, and why.
 - **Thresholds as policy.** At the recipe defaults, RCU has no Declining programs. Tighten the trend band to ±1.5% and three programs become Declining and eight become Growing. The data did not change. The labels are settings someone chose, and the page makes that visible.
 - **Schools.** The rollup shows what no single program shows: graduate programs hold 20% of enrollment but produced about two-thirds of the five-year gain. It also lists programs in quiet decline inside the Stable band, and the largest shares of enrollment against the concentration lines.
-- **Source.** Edit the YAML on the page and every view redraws.
+- **Behind the page.** Open the Source file drawer below the views, edit the YAML, and every view redraws. Build notes live there too, so the views hold only findings ([content first, machinery behind](../../patterns/content-first.md)).
 
 ## What it does not do
 

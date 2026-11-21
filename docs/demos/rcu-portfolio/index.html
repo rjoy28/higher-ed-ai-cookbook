@@ -151,6 +151,18 @@ details.collapse > summary h2 { display: inline; }
 details.collapse > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 details.collapse[open] > .collapse-note { margin: 2px 0 10px; }
 .collapse-note { color: var(--muted); max-width: 76ch; }
+details.drawer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+details.drawer[open] { padding-bottom: 16px; }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 0; min-height: 44px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: "▸"; color: var(--accent); width: 1ch; }
+details.drawer[open] > summary::before { content: "▾"; }
+details.drawer > summary h2 { display: inline; font-size: 1.2rem; }
+details.drawer > summary .sub { color: var(--muted); font-size: 0.92rem; }
+details.drawer > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+details.drawer > .drawer-body { display: grid; gap: 14px; padding-top: 6px; }
+.behind { margin-top: 48px; padding-top: 22px; border-top: 2px solid var(--line); display: grid; gap: 14px; }
+.behind .callout p + p { margin-top: 6px; }
 footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
 @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
 </style>
@@ -167,7 +179,6 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
   <div class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" id="tab-scorecard" aria-controls="scorecard" data-view="scorecard">Scorecard</button>
     <button class="tab" role="tab" id="tab-schools" aria-controls="schools" data-view="schools">Schools</button>
-    <button class="tab" role="tab" id="tab-source" aria-controls="source" data-view="source">Source</button>
   </div>
 
   <section class="panel" role="tabpanel" id="scorecard" aria-labelledby="tab-scorecard">
@@ -189,7 +200,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
     </div>
 
     <details class="collapse">
-      <summary><h2>Changed from the recipe defaults</h2><span class="pill tag" id="changes-count">None</span></summary>
+      <summary><h2>Changed from the defaults</h2><span class="pill tag" id="changes-count">None</span></summary>
       <p class="collapse-note">Programs whose label or tier differs from what the source file's settings produce. Nothing about the programs changed. Only the lines moved.</p>
       <div class="findings" id="changes"></div>
     </details>
@@ -216,7 +227,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
 
     <div class="section-head">
       <h2>Quiet decline</h2>
-      <p>Programs losing students but still inside the Stable band. The recipe calls this a watch, not a reaction.</p>
+      <p>Programs losing students but still inside the Stable band. Treat it as a watch, not a reaction.</p>
     </div>
     <div class="tablebox"><table id="soft-table"></table></div>
 
@@ -226,17 +237,20 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
     </div>
     <div class="tablebox"><table id="conc-table"></table></div>
 
-    <div class="callout">
-      <p><strong>What this page does not do.</strong> It applies the recipe's rules and shows where they land. It does not recommend Grow, Maintain, Restructure, or Sunset. In the recipe, an AI assistant drafts those, each tagged by evidence basis, and faculty governance and cabinet decide.</p>
-      <p>Enrollment size is not revenue. <a href="../rcu-economics/">RCU Program Economics</a> joins net tuition and section data to the same programs.</p>
-    </div>
+    
   </section>
 
-  <section class="panel" role="tabpanel" id="source" aria-labelledby="tab-source" hidden>
-    <div class="section-head">
-      <h2>The source</h2>
-      <p>This YAML is the whole demo. Change a headcount, add a program, or edit the settings, then select Apply to re-render every view. Edits stay in this browser tab until you copy them out.</p>
+  <aside class="behind" aria-labelledby="behind-title">
+    <p class="eyebrow" id="behind-title">Behind the page</p>
+    <div class="callout">
+      <p>These views apply the Academic Portfolio Analyst recipe's rules and show where they land. They do not recommend Grow, Maintain, Restructure, or Sunset. In the recipe, an AI assistant drafts those, each tagged by evidence basis, and faculty governance and cabinet decide.</p>
+      <p>Next in the series: <a href="../rcu-economics/">RCU Program Economics</a> joins net tuition and section data to the same programs.</p>
     </div>
+    <details class="drawer" id="source">
+      <summary><h2>Source file</h2><span class="sub">Every view on this page is drawn from it</span></summary>
+      <div class="drawer-body">
+      <p class="lede" style="margin:0">This YAML is the whole page. Change a headcount, add a program, or edit the settings, then select Apply to redraw every view. Edits stay in this browser tab until you copy them out.</p>
+    
     <div class="controls">
       <button class="btn" id="apply" type="button">Apply changes</button>
       <button class="btn ghost" id="reset" type="button">Reset to original</button>
@@ -247,16 +261,19 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
       <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-portfolio.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
       <dl class="schema">
         <dt>meta.years</dt><dd>Census years, oldest first. Every program's headcount list follows this order.</dd>
-        <dt>settings</dt><dd>The recipe's thresholds, from the Input Template's Config tab. The sliders start here, and Recipe defaults returns to these values.</dd>
+        <dt>settings</dt><dd>The recipe's thresholds, from the Input Template's Config tab. The sliders start here, and Defaults returns to these values.</dd>
         <dt>programs</dt><dd>One entry per program: name, level, school, online share in the latest year, headcount by year, and an optional note. Use null for a year the program did not exist.</dd>
         <dt>Shape</dt><dd>The same data as the Input Template's long shape (one row per program per year), folded so it is easier to read and edit.</dd>
       </dl>
     </div>
-  </section>
+  
+      </div>
+    </details>
+  </aside>
 
   <footer>
     <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. It matches the sample output in the Academic Portfolio Analyst recipe.</p>
-    <p><a href="../">All demos</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-portfolio-explorer">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+    <p><a href="../">All demos</a> · <a href="#source">Source file</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-portfolio-explorer">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
   </footer>
 </div>
 
@@ -438,7 +455,7 @@ programs:
     { k: "small_base", label: "Small-base line", min: 5, max: 60, step: 1, fmt: int },
   ];
   const PRESETS = [
-    { id: "defaults", label: "Recipe defaults", set: {} },
+    { id: "defaults", label: "Defaults", set: {} },
     { id: "tight", label: "Tighter trend band (±1.5%)", set: { trend_band: 0.015 } },
     { id: "midsize", label: "Mid-size college tiers", set: { tier_1: 100, tier_2: 40, tier_3: 15 } },
     { id: "lowconc", label: "Low concentration line (5%)", set: { concentration_flag: 0.05, concentration_watch: 0.04 } },
@@ -530,8 +547,8 @@ programs:
     s += n("New") ? ", with " + n("New") + " too new to rate. " : ". ";
     s += flags.length ? "<strong>" + flags.length + " program" + (flags.length > 1 ? "s cross" : " crosses") + " the " + pct(S.concentration_flag, 1) + " concentration line</strong>, led by " + esc(largest.name) + " at " + pct(largest.share, 1) + ". "
       : "No program crosses the " + pct(S.concentration_flag, 1) + " concentration line; the largest, " + esc(largest.name) + ", is " + pct(largest.share, 1) + " of enrollment" + (watch.length ? ", and " + watch.length + " sit on watch. " : ". ");
-    s += sameSettings(S, M.defaults) ? "These are the recipe defaults. Move a slider to see what is a fact about the programs and what is a setting."
-      : "<strong>" + changes.length + " program" + (changes.length === 1 ? "" : "s") + " changed label or tier</strong> compared with the recipe defaults, with no change to the data.";
+    s += sameSettings(S, M.defaults) ? "These are the default rules. Move a slider to see what is a fact about the programs and what is a setting."
+      : "<strong>" + changes.length + " program" + (changes.length === 1 ? "" : "s") + " changed label or tier</strong> compared with the defaults, with no change to the data.";
     $("narrative").innerHTML = s;
 
     const tiers = [1, 2, 3, 4].map((t) => rows.filter((r) => r.tier === t).length);
@@ -613,7 +630,7 @@ programs:
 
   function renderChanges(changes) {
     $("changes-count").textContent = changes.length ? changes.length + " program" + (changes.length === 1 ? "" : "s") : "None";
-    if (!changes.length) { $("changes").innerHTML = '<p class="empty">' + (sameSettings(S, M.defaults) ? "None. These are the recipe defaults. Try the tighter trend band to see the labels move." : "None. These settings produce the same labels and tiers as the defaults.") + "</p>"; return; }
+    if (!changes.length) { $("changes").innerHTML = '<p class="empty">' + (sameSettings(S, M.defaults) ? "None. These are the default rules. Try the tighter trend band to see the labels move." : "None. These settings produce the same labels and tiers as the defaults.") + "</p>"; return; }
     const why = (r, c) => {
       if (c.kind === "status") return r.name + " changes " + pct(r.cagr, 1, true) + " a year; the band is now ±" + (S.trend_band * 100).toFixed(2).replace(/0$/, "") + "%.";
       if (c.kind === "tier") return int(r.now) + " students; Tier lines are now " + S.tier_1 + " · " + S.tier_2 + " · " + S.tier_3 + ".";
@@ -725,8 +742,11 @@ programs:
   }
   function renderAll() { syncControls(); renderMeta(); renderScorecard(); renderSchools(); }
 
-  const TABS = ["scorecard", "schools", "source"];
+  const TABS = ["scorecard", "schools"];
+  // The source file lives behind the page, not in a tab. #source opens it.
+  const openSource = () => { const d = $("source"); d.open = true; d.scrollIntoView({ block: "start" }); };
   function show(view, focus) {
+    if (view === "source") { openSource(); view = TABS.find((t) => !$(t).hidden) || "scorecard"; }
     if (!TABS.includes(view)) view = "scorecard";
     TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
   }

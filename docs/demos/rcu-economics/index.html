@@ -151,6 +151,18 @@ textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); col
 .schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
 .schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
 .schema dd { margin: 0 0 6px; color: var(--muted); }
+details.drawer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+details.drawer[open] { padding-bottom: 16px; }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 0; min-height: 44px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: "▸"; color: var(--accent); width: 1ch; }
+details.drawer[open] > summary::before { content: "▾"; }
+details.drawer > summary h2 { display: inline; font-size: 1.2rem; }
+details.drawer > summary .sub { color: var(--muted); font-size: 0.92rem; }
+details.drawer > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+details.drawer > .drawer-body { display: grid; gap: 14px; padding-top: 6px; }
+.behind { margin-top: 48px; padding-top: 22px; border-top: 2px solid var(--line); display: grid; gap: 14px; }
+.behind .callout p + p { margin-top: 6px; }
 footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
 @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
 </style>
@@ -169,7 +181,6 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
     <button class="tab" role="tab" id="tab-revenue" aria-controls="revenue" data-view="revenue">Revenue</button>
     <button class="tab" role="tab" id="tab-teaching" aria-controls="teaching" data-view="teaching">Teaching load</button>
     <button class="tab" role="tab" id="tab-scenario" aria-controls="scenario" data-view="scenario">Discount scenario</button>
-    <button class="tab" role="tab" id="tab-source" aria-controls="source" data-view="source">Source</button>
   </div>
 
   <section class="panel" role="tabpanel" id="revenue" aria-labelledby="tab-revenue">
@@ -215,7 +226,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
         <h2 id="teach-rules-title" style="font-size:1.15rem">Section rules</h2>
         <div class="group" role="group" aria-labelledby="teach-preset-label"><span class="lbl" id="teach-preset-label">Try</span><span id="teach-presets" class="group" data-presets="teach"></span></div>
       </div>
-      <p class="settings-note">Recipe 16's flags for this term's sections, and how far a program's share of seats can drift from its share of net tuition before it is flagged.</p>
+      <p class="settings-note">Flags for this term's sections, and how far a program's share of seats can drift from its share of net tuition before it is flagged.</p>
       <div class="sliders" id="teach-sliders" data-sliders="teach"></div>
     </div>
     <p class="narrative" id="teach-narrative" aria-live="polite"></p>
@@ -243,13 +254,13 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
 
     <div class="section-head">
       <h2>Sections to review</h2>
-      <p>The Course Section Viability recipe's flags, with the program each section joins to.</p>
+      <p>Sections flagged under-enrolled, over cap, or near cap, with the program each one joins to.</p>
     </div>
     <div class="tablebox"><table id="section-table"></table></div>
 
     <div class="callout">
-      <p><strong>What this page does not do.</strong> It has no cost data. Seat share is not cost, and net tuition per program is an allocation. The page shows where revenue and teaching sit and which rules put them there. It does not say which programs pay for themselves.</p>
-      <p>In the recipes, an AI assistant drafts recommendations with evidence-basis tags, and people decide. A real version of this join needs the full term schedule, credit hours by major, and instructional cost, in the same source file.</p>
+      <p><strong>Read with care.</strong> There is no cost data here. Seat share is not cost, and net tuition per program is an allocation. These views show where revenue and teaching sit and which rules put them there, not which programs pay for themselves.</p>
+      <p>A full answer needs the whole term schedule, credit hours by major, and instructional cost, joined to the same programs.</p>
     </div>
   </section>
 
@@ -285,11 +296,16 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
     </div>
   </section>
 
-  <section class="panel" role="tabpanel" id="source" aria-labelledby="tab-source" hidden>
-    <div class="section-head">
-      <h2>The source</h2>
-      <p>This YAML is the whole demo. Change a headcount, remap a subject, or edit the rules, then select Apply to re-render every view. Edits stay in this browser tab until you copy them out.</p>
+  <aside class="behind" aria-labelledby="behind-title">
+    <p class="eyebrow" id="behind-title">Behind the page</p>
+    <div class="callout">
+      <p>This page joins three Cookbook recipes: Academic Portfolio Analyst (program enrollment), Net Tuition &amp; Discount Analyzer (tuition and aid), and Course Section Viability (sections). In the recipes, an AI assistant drafts recommendations with evidence-basis tags, and people decide.</p>
     </div>
+    <details class="drawer" id="source">
+      <summary><h2>Source file</h2><span class="sub">Every view on this page is drawn from it</span></summary>
+      <div class="drawer-body">
+      <p class="lede" style="margin:0">This YAML is the whole page. Change a headcount, remap a subject, or edit the rules, then select Apply to redraw every view. Edits stay in this browser tab until you copy them out.</p>
+    
     <div class="controls">
       <button class="btn" id="apply" type="button">Apply changes</button>
       <button class="btn ghost" id="reset" type="button">Reset to original</button>
@@ -303,14 +319,17 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid
         <dt>programs</dt><dd>Recipe 01's input. Each program's level must name a segment, and program headcounts must add up to the segment's, every year.</dd>
         <dt>sections</dt><dd>Recipe 16's section export for the term.</dd>
         <dt>subjects</dt><dd>The join. Each course prefix names the program it belongs to, or null for a course that serves several programs. Add a note when a mapping needs explaining.</dd>
-        <dt>settings</dt><dd>The rules and the scenario. The sliders start here, and Recipe defaults returns to these values. scenario_discount null keeps today's rate.</dd>
+        <dt>settings</dt><dd>The rules and the scenario. The sliders start here, and Defaults returns to these values. scenario_discount null keeps today's rate.</dd>
       </dl>
     </div>
-  </section>
+  
+      </div>
+    </details>
+  </aside>
 
   <footer>
     <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. It matches the sample outputs of the Academic Portfolio Analyst, Net Tuition &amp; Discount Analyzer, and Course Section Viability recipes.</p>
-    <p><a href="../">All demos</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-program-economics">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+    <p><a href="../">All demos</a> · <a href="#source">Source file</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-program-economics">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
   </footer>
 </div>
 
@@ -719,9 +738,9 @@ programs:
   const getS = (d) => d.get ? d.get() : S[d.k];
   const defS = (d) => d.def ? d.def() : M.defaults[d.k];
   const PRESETS = () => [
-    { id: "defaults", tab: "rev", label: "Recipe defaults", set: {} },
+    { id: "defaults", tab: "rev", label: "Defaults", set: {} },
     { id: "online", tab: "rev", label: "Online students aided less", set: { online: Object.fromEntries(Object.keys(M.segments).map((k) => [k, Math.min(M.onlineMax[k], Math.round(lastDisc(k) * 0.55 * 200) / 200)])) } },
-    { id: "defaults", tab: "teach", label: "Recipe defaults", set: {} },
+    { id: "defaults", tab: "teach", label: "Defaults", set: {} },
     { id: "strict", tab: "teach", label: "Stricter section review", set: { cancel_below: 15, near_cap: 0.85 } },
   ];
   const TAB_KEYS = { rev: ["discount_goal"], teach: ["cancel_below", "near_cap", "load_gap"] };
@@ -1114,8 +1133,11 @@ programs:
   }
   function renderAll() { syncControls(); syncScen(); const E = evaluate(M, S); renderMeta(E); renderRevenue(E); renderTeaching(E); renderScenario(E); }
 
-  const TABS = ["revenue", "teaching", "scenario", "source"];
+  const TABS = ["revenue", "teaching", "scenario"];
+  // The source file lives behind the page, not in a tab. #source opens it.
+  const openSource = () => { const d = $("source"); d.open = true; d.scrollIntoView({ block: "start" }); };
   function show(view, focus) {
+    if (view === "source") { openSource(); view = TABS.find((t) => !$(t).hidden) || "revenue"; }
     if (!TABS.includes(view)) view = "revenue";
     TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
   }
