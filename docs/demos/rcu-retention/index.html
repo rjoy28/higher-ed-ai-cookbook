@@ -415,7 +415,10 @@ events:
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const MINUS = "−";
-  const pct = (x, d = 1) => x == null || !isFinite(x) ? "n/a" : (x < 0 ? MINUS : "") + Math.abs(x * 100).toFixed(d) + "%";
+  const rnd = (x, d = 1) => Math.round(x * 10 ** (d + 2)) / 10 ** (d + 2);
+  const pct = (x, d = 1) => x == null || !isFinite(x) ? "n/a" : (x < 0 ? MINUS : "") + Math.abs(rnd(x, d) * 100).toFixed(d) + "%";
+  // Changes and gaps are taken between the rounded figures the page prints, so they always match by eye.
+  const diff = (a, b) => rnd(b) - rnd(a);
   const pts = (x) => (x > 0.00049 ? "+" : x < -0.00049 ? MINUS : "") + Math.abs(x * 100).toFixed(1) + " pts";
   const int = (n) => Math.round(Number(n)).toLocaleString();
   const list = (a) => a.length <= 1 ? a.join("") : a.length === 2 ? a[0] + " and " + a[1] : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
@@ -583,7 +586,7 @@ events:
     s += last.toGoal ? esc(last.name) + " would have needed <strong>" + plural(last.toGoal, "more student") + "</strong> to return to reach it." : esc(last.name) + " reached it.";
     if (pend.length) s += " " + list(pend.map((c) => esc(c.name) + "'s " + int(c.size) + " students")) + " " + (pend.length === 1 ? "aren't" : "aren't") + " counted until " + list(pend.map((c) => esc(nextFall(c.name)))) + ".";
     $("sc-narrative").innerHTML = s;
-    const change = last.rate - first.rate;
+    const change = diff(first.rate, last.rate);
     $("sc-stats").innerHTML = stat(pct(last.rate), last.name + " retained; goal " + pct(S.goal, 0), last.cls) + stat(pts(change), "Since " + first.name) + stat(int(last.toGoal), "Students short of goal, " + last.name, last.toGoal ? "warn" : "ok") +
       stat(int(O.reduce((a, c) => a + c.notRet, 0)), "Students not retained, " + O.length + " cohorts") + stat(below.length + " of " + O.length, "Completed cohorts below goal", below.length ? "warn" : "ok");
     $("sc-chart").innerHTML = linesSVG(C, [{ name: "All students", cls: "all", vals: C.map((c) => c.rate) }], { valueLabels: true, label: "Line chart of retention to the second fall by entry cohort" });
@@ -601,7 +604,7 @@ events:
     let s = "";
     if (vis.length) s += "In " + esc(l.name) + ", " + list(vis.map((g) => esc(g.name) + " retained <strong>" + pct(g.cells[G.l].rate) + "</strong>")) + ". ";
     const both = G.groups.filter((g) => !g.cells[G.f].hidden && !g.cells[G.l].hidden);
-    if (G.f !== G.l && both.length) s += "Change since " + esc(f.name) + ": " + list(both.map((g) => esc(g.name) + " " + pts(g.cells[G.l].rate - g.cells[G.f].rate)).concat(["all students " + pts(l.rate - f.rate)])) + ". ";
+    if (G.f !== G.l && both.length) s += "Change since " + esc(f.name) + ": " + list(both.map((g) => esc(g.name) + " " + pts(diff(g.cells[G.f].rate, g.cells[G.l].rate))).concat(["all students " + pts(diff(f.rate, l.rate))])) + ". ";
     const atGoal = vis.filter((g) => g.cells[G.l].rate >= S.goal - 1e-12), near = vis.filter((g) => g.cells[G.l].rate < S.goal - 1e-12 && g.cells[G.l].rate >= S.approaching - 1e-12);
     if (atGoal.length) s += list(atGoal.map((g) => esc(g.name))) + (atGoal.length === 1 ? " is" : " are") + " at goal. "; else if (near.length) s += list(near.map((g) => esc(g.name))) + (near.length === 1 ? " is" : " are") + " approaching goal. ";
     $("g-narrative").innerHTML = s;
@@ -615,15 +618,15 @@ events:
       if (dim.into && !S.combine) s2 += "Combining small groups folds " + list(hidden.map((g) => esc(g.name))) + " into " + esc(dim.into) + " and shows both. ";
     }
     if (G.fixed != null && G.f !== G.l) {
-      const mix = l.rate - G.fixed;
+      const mix = diff(G.fixed, l.rate);
       const shifts = G.groups.map((g) => ({ g, a: g.cells[G.f].size / f.size, b: g.cells[G.l].size / l.size })).sort((x, y) => (y.b - y.a) - (x.b - x.a))[0];
       if (Math.abs(mix) >= 0.003) s2 += "Changes in who enrolls moved the overall rate by <strong>" + pts(mix) + "</strong>: at " + esc(f.name) + "'s mix of groups, " + esc(l.name) + " would have retained " + pct(G.fixed) + ". " + esc(shifts.g.name) + " went from " + pct(shifts.a, 0) + " to " + pct(shifts.b, 0) + " of the cohort.";
       else s2 += "Changes in who enrolls moved the overall rate by less than half a point, so the groups' own rates explain the trend.";
     } else if (hidden.length && G.f !== G.l) s2 += "The fixed-mix comparison needs every group, so it isn't computed here.";
     $("g-narrative2").innerHTML = s2;
-    const gapL = vis.length > 1 ? vis[0].cells[G.l].rate - vis[vis.length - 1].cells[G.l].rate : null;
+    const gapL = vis.length > 1 ? diff(vis[vis.length - 1].cells[G.l].rate, vis[0].cells[G.l].rate) : null;
     const top = vis[0], bot = vis[vis.length - 1];
-    const gapF = vis.length > 1 && !top.cells[G.f].hidden && !bot.cells[G.f].hidden ? top.cells[G.f].rate - bot.cells[G.f].rate : null;
+    const gapF = vis.length > 1 && !top.cells[G.f].hidden && !bot.cells[G.f].hidden ? diff(bot.cells[G.f].rate, top.cells[G.f].rate) : null;
     $("g-stats").innerHTML = (gapL != null ? stat(pts(gapL).replace("+", ""), "Gap, " + top.name + " to " + bot.name + ", " + l.name) : "") + (gapF != null ? stat(pts(gapF).replace("+", ""), "Same gap, " + f.name) : "") +
       stat(G.fixed == null ? "—" : pct(G.fixed), l.name + " at " + f.name + "'s mix") + stat(int(G.groups.reduce((a, g) => a + g.cells.filter((c) => c.hidden).length, 0)), "Cells hidden", G.groups.some((g) => g.cells.some((c) => c.hidden)) ? "warn" : "");
     $("g-title").textContent = "Retained to the second fall, by " + dim.name.toLowerCase();
@@ -648,11 +651,11 @@ events:
     const all = (k) => rate(W.tot(k));
     const ev = (r, k) => M.events.find((e) => e.course === r.name && (k == null || e.cohort === C[k].name));
     const evAny = (r) => M.events.find((e) => e.course === r.name && C.some((c) => c.name === e.cohort && c.i > f && c.i <= l));
-    const rows = W.rows.map((r) => ({ r, a: r.rate(f), b: r.rate(l), ch: r.rate(l) - r.rate(f), encL: r.vals[l][0], dfwL: r.vals[l][1], e: evAny(r) }));
+    const rows = W.rows.map((r) => ({ r, a: r.rate(f), b: r.rate(l), ch: diff(r.rate(f), r.rate(l)), encL: r.vals[l][0], dfwL: r.vals[l][1], e: evAny(r) }));
     const totL = W.tot(l);
     rows.forEach((x) => { x.shareEnr = x.encL / totL[0]; x.shareDfw = totL[1] ? x.dfwL / totL[1] : 0; });
     const drop = rows.slice().sort((a, b) => a.ch - b.ch)[0], rise = rows.slice().sort((a, b) => b.ch - a.ch)[0];
-    const total = all(l) - all(f);
+    const total = diff(all(f), all(l));
     let s = "First-year DFW in gateway courses " + (total <= 0 ? "fell" : "rose") + " from <strong>" + pct(all(f)) + "</strong> for " + esc(F.name) + " to <strong>" + pct(all(l)) + "</strong> for " + esc(Lc.name) + ". ";
     if (drop && drop.ch < 0) {
       const restF = rate(W.tot(f, drop.r)), restL = rate(W.tot(l, drop.r));
@@ -664,7 +667,7 @@ events:
     let s2 = "";
     if (rise && rise.ch > 0.0005) { s2 += esc(short(rise.r.name)) + " is moving the other way, from " + pct(rise.a) + " to " + pct(rise.b) + ". "; if (rise.e) s2 += "Recorded for " + esc(rise.e.cohort) + ": " + esc(rise.e.what) + " "; }
     const heavy = rows.filter((x) => x.shareDfw - x.shareEnr > 0.03).sort((a, b) => (b.shareDfw - b.shareEnr) - (a.shareDfw - a.shareEnr));
-    if (heavy.length) s2 += "In " + esc(Lc.name) + ", " + list(heavy.map((x) => esc(short(x.r.name)) + " is " + pct(x.shareEnr, 0) + " of gateway enrollments and " + pct(x.shareDfw, 0) + " of DFW grades")) + ". ";
+    if (heavy.length) s2 += "In " + esc(Lc.name) + ", " + heavy.map((x) => esc(short(x.r.name)) + " is " + pct(x.shareEnr, 0) + " of gateway enrollments and " + pct(x.shareDfw, 0) + " of DFW grades").join("; ") + ". ";
     if (F.rate != null && Lc.rate != null && F !== Lc) s2 += "Retention " + (Lc.rate >= F.rate ? "rose" : "fell") + " across the same cohorts, from " + pct(F.rate) + " to " + pct(Lc.rate) + ".";
     $("gw-narrative2").innerHTML = s2;
     const recon = W.O.every((c) => c.dfw == null || Math.abs(all(c.i) - c.dfw) < 0.0005);
