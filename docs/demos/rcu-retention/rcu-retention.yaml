@@ -1,0 +1,100 @@
+# RCU Retention Risk: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It holds first-year
+# retention by entry cohort, the same cohorts split by student group, and
+# first-year grades in gateway courses. Every number is a group total.
+# There are no student rows here, and the page cannot produce any.
+#
+# Schema
+#   meta        institution, cohort definition, steward, as_of
+#   settings    goal and approaching: retention bands (recipe 11 defaults 0.75 / 0.70)
+#               min_cell: smallest group the page will show (default 10)
+#               combine_small: true folds each dimension's small groups into the
+#               group named in its combine_into, instead of suppressing them
+#   cohorts     [entry cohort, cohort size, retained to year 2 (count), DFW rate].
+#               A cohort whose second fall hasn't happened is null, never estimated.
+#   dimensions  each splits every cohort into groups. groups: name -> one
+#               [size, retained] pair per cohort, in cohort order. Sizes and
+#               retained counts must add up to the cohort row; the page checks.
+#   gateway     first-year enrollments and D, F and W grades by course:
+#               name -> one [enrolled, DFW grades] pair per cohort.
+#   events      changes a person recorded, so a shift in the numbers has a
+#               reason next to it.
+#
+# Rules the page applies
+#   retained %      retained / cohort size
+#   status          At goal >= goal; Approaching >= approaching; Below goal otherwise
+#   students to goal  ceil(goal x size) - retained, never below 0
+#   suppression     a group smaller than min_cell is not shown. If that leaves one
+#                   hidden group in a cohort, the next-smallest group is hidden too,
+#                   so the hidden one can't be recovered by subtraction.
+#   fixed mix       the latest cohort's group rates, weighted by the first cohort's
+#                   group shares. Computed only when no group is hidden.
+#   DFW rate        DFW grades / gateway enrollments; it reconciles to the cohort row
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-10-15"
+  cohort_definition: First-time undergraduates, traditional and online, entering in fall
+  retained_means: Enrolled at the second fall census
+  steward: Institutional Research
+  fixture: true
+
+settings:
+  goal: 0.75
+  approaching: 0.70
+  min_cell: 10
+  combine_small: false
+
+cohorts:
+  - ["Fall 2022", 480, 317, 0.145]
+  - ["Fall 2023", 488, 327, 0.138]
+  - ["Fall 2024", 500, 340, 0.131]
+  - ["Fall 2025", 511, 353, 0.126]
+  - ["Fall 2026", 524, null, null]
+
+dimensions:
+  - id: modality
+    name: Modality
+    note: Matches the Enrollment Funnel's Traditional UG and Online UG segments.
+    groups:
+      Traditional: [[374, 260], [370, 263], [366, 266], [362, 268], [366, null]]
+      Online:      [[106, 57], [118, 64], [134, 74], [149, 85], [158, null]]
+  - id: pell
+    name: Pell eligibility
+    note: Pell status at entry, from the financial aid census file.
+    groups:
+      Pell-eligible: [[211, 125], [224, 136], [232, 143], [240, 150], [248, null]]
+      Not Pell:      [[269, 192], [264, 191], [268, 197], [271, 203], [276, null]]
+  - id: firstgen
+    name: First generation
+    note: Neither parent completed a bachelor's degree, as reported on the application.
+    groups:
+      First generation:      [[163, 96], [171, 104], [180, 113], [189, 122], [196, null]]
+      Continuing generation: [[317, 221], [317, 223], [320, 227], [322, 231], [328, null]]
+  - id: region
+    name: Home region
+    note: Permanent address at entry.
+    combine_into: Out of state
+    groups:
+      In state:      [[352, 238], [355, 245], [361, 252], [365, 259], [372, null]]
+      Out of state:  [[120, 75], [124, 77], [132, 82], [140, 88], [146, null]]
+      International: [[8, 4], [9, 5], [7, 6], [6, 6], [6, null]]
+
+gateway:
+  ENG 101 Composition I:          [[442, 56], [449, 51], [460, 64], [470, 65], [481, null]]
+  MATH 110 College Algebra:       [[278, 86], [283, 85], [290, 64], [296, 59], [304, null]]
+  BIB 110 Old Testament Survey:   [[422, 30], [429, 28], [440, 29], [450, 27], [461, null]]
+  PSY 101 General Psychology:     [[221, 27], [224, 26], [230, 26], [235, 26], [241, null]]
+  CHEM 111 General Chemistry I:   [[115, 31], [117, 32], [120, 34], [123, 36], [126, null]]
+  COM 101 Public Speaking:        [[192, 12], [195, 12], [200, 11], [204, 11], [210, null]]
+
+events:
+  - cohort: Fall 2024
+    course: MATH 110 College Algebra
+    what: MATH 110 moved to a corequisite model. Students who would have been placed in noncredit MATH 090 now take MATH 110 with a support lab in the same term.
+  - cohort: Fall 2025
+    course: CHEM 111 General Chemistry I
+    what: CHEM 111 lost its second lab instructor. Lab sections went from four to three, with the same number of students.

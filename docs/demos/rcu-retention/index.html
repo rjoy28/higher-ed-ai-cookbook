@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RCU Retention Risk</title>
+<meta name="description" content="Four entry cohorts at a fictional university: how far first-year retention sits from goal, which student groups the pooled rate hides, and which gateway courses moved it. Group totals only.">
+<meta property="og:title" content="RCU Retention Risk">
+<meta property="og:description" content="How far first-year retention sits from goal, which groups the pooled rate hides, and which gateway courses moved it.">
+<meta property="og:image" content="https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-retention/preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Same visual system as the RCU Systems Atlas and Portfolio Explorer, so the demos read as one set. */
+:root {
+  --bg: #f4f7f8; --surface: #ffffff; --ink: #14212b; --muted: #475763; --line: #d2dbe0; --accent: #0d6670;
+  --grad: #1f5fa8; --ug: #8a4b0f;
+  --crit: #b42318; --warn: #8f5400; --ok: #1d7a3a; --band: rgba(13,102,112,.09);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e1418; --surface: #162027; --ink: #e5edf1; --muted: #a2b1ba; --line: #2b3a44; --accent: #5cc3cc;
+  --grad: #84b4ee; --ug: #e4a76a;
+  --crit: #ff8b7b; --warn: #f2b84b; --ok: #72d38f; --band: rgba(92,195,204,.12); color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 1rem; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); font-stretch: 85%; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.lede { color: var(--muted); max-width: 72ch; margin-top: 8px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 0.88rem; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 22px; border-bottom: 2px solid var(--line); }
+.tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 0.98rem var(--f-body); padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px; cursor: pointer; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+:is(.tab, button, input, textarea, a):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.panel { padding-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+
+.settings { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 14px; margin-top: 22px; }
+.settings-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.settings-note { font-size: 0.88rem; color: var(--muted); max-width: 90ch; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; }
+.slider { display: grid; gap: 2px; }
+.slider label { font-size: 0.86rem; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.slider output { font-family: var(--f-mono); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.slider output.changed { color: var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group > .lbl { font-size: 0.86rem; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.chipbtn { font: 600 0.88rem var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+.chipbtn:hover { border-color: var(--accent); }
+.chipbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn { font: 600 0.92rem var(--f-body); border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+
+.narrative { font-size: 1.12rem; max-width: 76ch; }
+.narrative + .narrative { margin-top: -10px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stat { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.stat .n { font-family: var(--f-display); font-stretch: 85%; font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-size: 0.84rem; color: var(--muted); }
+.stat.ok .n { color: var(--ok); } .stat.warn .n { color: var(--warn); } .stat.crit .n { color: var(--crit); }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.figure h3 { margin: 4px 4px 2px; }
+.figure .cap { color: var(--muted); font-size: 0.9rem; margin: 0 4px 6px; max-width: 80ch; }
+.svgbox { overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.tick { font: 12px var(--f-mono); fill: var(--muted); }
+.grid { stroke: var(--line); stroke-width: 1; }
+.axistitle { font: 600 12.5px var(--f-body); fill: var(--muted); }
+.bandrect { fill: var(--band); }
+.bandline { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.diag { stroke: var(--accent); stroke-width: 1.5; }
+.reflabel { font: 600 11.5px var(--f-mono); fill: var(--accent); }
+.pt { stroke: var(--surface); stroke-width: 1.5; }
+.pt.ug { fill: var(--ug); } .pt.grad { fill: var(--grad); }
+.pt.hollow { fill: var(--surface); stroke-width: 2; } .pt.hollow.ug { stroke: var(--ug); } .pt.hollow.grad { stroke: var(--grad); }
+.plabel { font: 600 11.5px var(--f-body); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.slope.ug { stroke: var(--ug); } .slope.grad { stroke: var(--grad); }
+.slope { stroke-width: 2; fill: none; opacity: .85; }
+.slope.dim { opacity: .3; }
+.rowlabel { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.rowlabel.dim { fill: var(--muted); font-weight: 400; }
+.colhead { font: 700 11.5px var(--f-mono); letter-spacing: .06em; fill: var(--muted); text-transform: uppercase; }
+.line-net { fill: none; stroke-width: 2.4; } .line-sticker { fill: none; stroke-width: 2; stroke-dasharray: 6 4; }
+.line-net.ug, .line-sticker.ug { stroke: var(--ug); } .line-net.grad, .line-sticker.grad { stroke: var(--grad); }
+.dot.ug { fill: var(--ug); } .dot.grad { fill: var(--grad); }
+.vlabel { font: 600 11.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { flex: none; }
+
+.section-head { display: grid; gap: 4px; }
+.section-head p { color: var(--muted); max-width: 76ch; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg); white-space: nowrap; }
+tbody th { font-weight: 600; color: var(--ink); background: none; min-width: 220px; }
+th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+th[aria-sort] button::after { content: "↕"; opacity: .45; }
+th[aria-sort="ascending"] button::after { content: "↑"; opacity: 1; }
+th[aria-sort="descending"] button::after { content: "↓"; opacity: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num { white-space: nowrap; }
+tr:last-child > * { border-bottom: 0; }
+.sub { color: var(--muted); font-size: 0.86rem; font-weight: 400; display: block; }
+.note { color: var(--ink); font-size: 0.84rem; font-weight: 400; display: block; font-style: italic; max-width: 46ch; margin-top: 0.35rem; line-height: 1.4; }
+.move { display: block; font-size: 0.84rem; font-weight: 600; }
+.move.up { color: var(--ok); } .move.down { color: var(--crit); } .move.same { color: var(--muted); font-weight: 400; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1.5px solid currentColor; white-space: nowrap; }
+.pill.ok { color: var(--ok); } .pill.crit { color: var(--crit); } .pill.warn { color: var(--warn); } .pill.muted { color: var(--muted); } .pill.tag { color: var(--accent); }
+.lvl { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+.lvl.ug { background: var(--ug); } .lvl.grad { background: var(--grad); border-radius: 50%; }
+
+.findings { display: grid; gap: 8px; }
+.finding { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.finding .stripe { background: var(--accent); }
+.finding.warn .stripe { background: var(--warn); }
+.finding .body { padding: 10px 14px; display: grid; gap: 4px; }
+.finding .top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.finding .why { color: var(--ink); font-size: 0.92rem; max-width: 80ch; }
+.empty { color: var(--muted); padding: 12px 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 82ch; }
+.callout p + p { margin-top: 6px; }
+.two-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.two-fig .svgbox svg { min-width: 420px; }
+
+textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; tab-size: 2; resize: vertical; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.status { font-size: 0.92rem; color: var(--muted); min-height: 1.5em; }
+.status.err { color: var(--crit); font-weight: 600; white-space: pre-wrap; }
+.status.ok { color: var(--ok); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px; align-items: start; }
+.schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
+.schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+.schema dd { margin: 0 0 6px; color: var(--muted); }
+details.drawer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+details.drawer[open] { padding-bottom: 16px; }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 0; min-height: 44px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: "▸"; color: var(--accent); width: 1ch; }
+details.drawer[open] > summary::before { content: "▾"; }
+details.drawer > summary h2 { display: inline; font-size: 1.2rem; }
+details.drawer > summary .sub { color: var(--muted); font-size: 0.92rem; }
+details.drawer > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+details.drawer > .drawer-body { display: grid; gap: 14px; padding-top: 6px; }
+.behind { margin-top: 48px; padding-top: 22px; border-top: 2px solid var(--line); display: grid; gap: 14px; }
+.behind .callout p + p { margin-top: 6px; }
+footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
+@media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+/* Retention Risk additions */
+:root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
+@media (prefers-color-scheme: dark) { :root { --s1: #3987e5; --s2: #d95926; --s3: #199e70; } }
+.zone.crit { fill: var(--crit); opacity: .07; } .zone.warn { fill: var(--warn); opacity: .09; } .zone.ok { fill: var(--ok); opacity: .07; }
+.zonelabel { font: 600 11px var(--f-mono); letter-spacing: .04em; text-transform: uppercase; }
+.zonelabel.crit { fill: var(--crit); } .zonelabel.warn { fill: var(--warn); } .zonelabel.ok { fill: var(--ok); }
+.ser { fill: none; stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.ser.all { stroke: var(--ink); } .ser.all.dash { stroke-dasharray: 6 5; stroke-width: 2; }
+.ser.s1 { stroke: var(--s1); } .ser.s2 { stroke: var(--s2); } .ser.s3 { stroke: var(--s3); }
+.mk { stroke: var(--surface); stroke-width: 2; }
+.mk.all { fill: var(--ink); } .mk.s1 { fill: var(--s1); } .mk.s2 { fill: var(--s2); } .mk.s3 { fill: var(--s3); }
+.mk.pending { fill: var(--surface); stroke: var(--muted); stroke-width: 2; stroke-dasharray: 3 2; }
+.pendlabel { font: 600 11.5px var(--f-body); fill: var(--muted); }
+.lvl.s1 { background: var(--s1); } .lvl.s2 { background: var(--s2); } .lvl.s3 { background: var(--s3); } .lvl.all { background: var(--ink); }
+.lvl.dash { background: repeating-linear-gradient(90deg, var(--ink) 0 5px, transparent 5px 8px); height: 3px; width: 18px; vertical-align: 3px; border-radius: 0; }
+.slopeln { fill: none; stroke: var(--muted); stroke-width: 2; opacity: .55; }
+.slopeln.hl { stroke: var(--accent); opacity: 1; stroke-width: 2.6; }
+.slopedot { fill: var(--muted); stroke: var(--surface); stroke-width: 2; } .slopedot.hl { fill: var(--accent); }
+td.hid { color: var(--muted); font-style: italic; }
+.switch-row { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+.cellnote { font-size: 0.84rem; color: var(--muted); display: block; }
+.status-cell { white-space: nowrap; }
+#gw-table thead th { white-space: normal; vertical-align: bottom; }
+#gw-table tbody th { min-width: 200px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Test Kitchen · Higher Ed AI Cookbook</p>
+    <h1>RCU Retention Risk</h1>
+    <p class="lede">Four entry cohorts at Riverside Christian University: how far first-year retention sits from goal, which student groups the pooled rate hides, and which gateway courses moved it. Every number on this page is a group total.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-scorecard" aria-controls="scorecard" data-view="scorecard">Cohort scorecard</button>
+    <button class="tab" role="tab" id="tab-groups" aria-controls="groups" data-view="groups">Student groups</button>
+    <button class="tab" role="tab" id="tab-gateway" aria-controls="gateway" data-view="gateway">Gateway courses</button>
+  </div>
+
+  <section class="panel" role="tabpanel" id="scorecard" aria-labelledby="tab-scorecard">
+    <div class="settings" role="group" aria-labelledby="bands-title" style="margin-top:0">
+      <div class="settings-head">
+        <h2 id="bands-title" style="font-size:1.15rem">Retention goal</h2>
+        <div class="group" role="group" aria-labelledby="preset-label"><span class="lbl" id="preset-label">Try</span><span id="presets" class="group"></span></div>
+      </div>
+      <p class="settings-note">A cohort is at goal when this share of its students is enrolled at the second fall census, and approaching above the second line. The goal is a decision the institution made, not a fact about its students: move it and watch the distance change.</p>
+      <div class="sliders" id="sliders"></div>
+    </div>
+    <p class="narrative" id="sc-narrative" aria-live="polite"></p>
+    <div class="stats" id="sc-stats"></div>
+    <div class="figure">
+      <h3>Retained to the second fall, by entry cohort</h3>
+      <p class="cap">Share of each fall's first-time undergraduates enrolled the next fall. Shading marks the goal bands. A cohort is plotted only after its second fall.</p>
+      <div class="svgbox" id="sc-chart"></div>
+    </div>
+    <div class="section-head">
+      <h2>Every cohort</h2>
+      <p>"Students to goal" is how many more students in that cohort would have had to return for it to reach the goal line.</p>
+    </div>
+    <div class="tablebox"><table id="sc-table"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="groups" aria-labelledby="tab-groups" hidden>
+    <div class="settings" role="group" aria-labelledby="dim-title" style="margin-top:0">
+      <div class="settings-head">
+        <h2 id="dim-title" style="font-size:1.15rem">Split the cohort by</h2>
+      </div>
+      <div class="group" role="group" aria-label="Dimension" id="dims"></div>
+      <div class="sliders"><div class="slider"><label for="s-min"><span>Smallest group shown</span><output id="o-min" for="s-min"></output></label><input type="range" id="s-min" min="5" max="30" step="1"></div></div>
+      <div class="switch-row"><label class="switch"><input type="checkbox" id="combine"> Combine small groups</label><span class="settings-note" id="combine-note"></span></div>
+    </div>
+    <p class="narrative" id="g-narrative" aria-live="polite"></p>
+    <p class="narrative" id="g-narrative2"></p>
+    <div class="stats" id="g-stats"></div>
+    <div class="figure">
+      <h3 id="g-title">Retained to the second fall, by group</h3>
+      <p class="cap" id="g-cap"></p>
+      <div class="svgbox" id="g-chart"></div>
+      <div class="legend" id="g-legend"></div>
+    </div>
+    <div class="section-head">
+      <h2 id="g-table-title">Every group, every cohort</h2>
+      <p>Retention, with returning students out of the group's size. A hidden cell is one the page won't show at the current setting.</p>
+    </div>
+    <div class="tablebox"><table id="g-table"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="gateway" aria-labelledby="tab-gateway" hidden>
+    <p class="narrative" id="gw-narrative" aria-live="polite"></p>
+    <p class="narrative" id="gw-narrative2"></p>
+    <div class="stats" id="gw-stats"></div>
+    <div class="figure">
+      <h3 id="gw-title">DFW rate by gateway course</h3>
+      <p class="cap">Share of first-year enrollments that ended in a D, an F, or a withdrawal. Highlighted courses had a change recorded in the source file.</p>
+      <div class="svgbox" id="gw-chart"></div>
+    </div>
+    <div class="section-head">
+      <h2>Every gateway course</h2>
+      <p>Select a column heading to sort. The two share columns show whether a course carries more of the DFW grades than of the enrollments.</p>
+    </div>
+    <div class="tablebox"><table id="gw-table"></table></div>
+    <div class="callout"><p><strong>Read with care.</strong> Four cohorts can show that retention and DFW moved together. They can't show that one caused the other, or which students were affected.</p></div>
+  </section>
+
+  <aside class="behind" aria-labelledby="behind-title">
+    <p class="eyebrow" id="behind-title">Behind the page</p>
+    <div class="callout">
+      <p>This page applies the Retention Risk Analyst recipe to a synthetic cohort table. In the recipe, an AI assistant reads retention by entry cohort, returns a scorecard and the gap to goal, and drafts group-level supports tagged research-backed, industry practice, or analyst judgment. Student-success leadership decides.</p>
+      <p>The recipe never accepts or produces student rows, risk scores, or predictions about who will leave. That keeps the work out of individual education records under FERPA. The source file below holds only group totals, and the page hides any group too small to report safely.</p>
+    </div>
+    <details class="drawer" id="source">
+      <summary><h2>Source file</h2><span class="sub">Every view on this page is drawn from it</span></summary>
+      <div class="drawer-body">
+      <p class="lede" style="margin:0">This YAML is the whole page: the cohort table, the same cohorts split by group, gateway-course grades, and the goal. Add a cohort, a group, or a course, then select Apply to redraw every view. Edits stay in this browser tab until you copy them out.</p>
+      <div class="controls">
+        <button class="btn" id="apply" type="button">Apply changes</button>
+        <button class="btn ghost" id="reset" type="button">Reset to original</button>
+        <button class="btn ghost" id="copy" type="button">Copy YAML</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <div class="two">
+        <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-retention.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
+        <dl class="schema">
+          <dt>cohorts</dt><dd>One row per entry cohort: size, students retained to the second fall, and gateway DFW rate. A cohort not yet observed is null.</dd>
+          <dt>dimensions</dt><dd>The same cohorts split into groups. The page checks that every split adds up to the cohort row.</dd>
+          <dt>gateway</dt><dd>First-year enrollments and DFW grades by course. They reconcile to the cohort DFW rate.</dd>
+          <dt>events, settings</dt><dd>Recorded changes that explain a shift, and the goal bands and smallest reportable group.</dd>
+        </dl>
+      </div>
+      </div>
+    </details>
+  </aside>
+
+  <footer>
+    <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. It matches the sample output of the Retention Risk Analyst recipe, and its cohort sizes match the Enrollment Funnel recipe.</p>
+    <p><a href="../">All demos</a> · <a href="#source">Source file</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-retention-risk">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+  </footer>
+</div>
+
+<script type="text/yaml" id="source-yaml">
+# RCU Retention Risk: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It holds first-year
+# retention by entry cohort, the same cohorts split by student group, and
+# first-year grades in gateway courses. Every number is a group total.
+# There are no student rows here, and the page cannot produce any.
+#
+# Schema
+#   meta        institution, cohort definition, steward, as_of
+#   settings    goal and approaching: retention bands (recipe 11 defaults 0.75 / 0.70)
+#               min_cell: smallest group the page will show (default 10)
+#               combine_small: true folds each dimension's small groups into the
+#               group named in its combine_into, instead of suppressing them
+#   cohorts     [entry cohort, cohort size, retained to year 2 (count), DFW rate].
+#               A cohort whose second fall hasn't happened is null, never estimated.
+#   dimensions  each splits every cohort into groups. groups: name -> one
+#               [size, retained] pair per cohort, in cohort order. Sizes and
+#               retained counts must add up to the cohort row; the page checks.
+#   gateway     first-year enrollments and D, F and W grades by course:
+#               name -> one [enrolled, DFW grades] pair per cohort.
+#   events      changes a person recorded, so a shift in the numbers has a
+#               reason next to it.
+#
+# Rules the page applies
+#   retained %      retained / cohort size
+#   status          At goal >= goal; Approaching >= approaching; Below goal otherwise
+#   students to goal  ceil(goal x size) - retained, never below 0
+#   suppression     a group smaller than min_cell is not shown. If that leaves one
+#                   hidden group in a cohort, the next-smallest group is hidden too,
+#                   so the hidden one can't be recovered by subtraction.
+#   fixed mix       the latest cohort's group rates, weighted by the first cohort's
+#                   group shares. Computed only when no group is hidden.
+#   DFW rate        DFW grades / gateway enrollments; it reconciles to the cohort row
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-10-15"
+  cohort_definition: First-time undergraduates, traditional and online, entering in fall
+  retained_means: Enrolled at the second fall census
+  steward: Institutional Research
+  fixture: true
+
+settings:
+  goal: 0.75
+  approaching: 0.70
+  min_cell: 10
+  combine_small: false
+
+cohorts:
+  - ["Fall 2022", 480, 317, 0.145]
+  - ["Fall 2023", 488, 327, 0.138]
+  - ["Fall 2024", 500, 340, 0.131]
+  - ["Fall 2025", 511, 353, 0.126]
+  - ["Fall 2026", 524, null, null]
+
+dimensions:
+  - id: modality
+    name: Modality
+    note: Matches the Enrollment Funnel's Traditional UG and Online UG segments.
+    groups:
+      Traditional: [[374, 260], [370, 263], [366, 266], [362, 268], [366, null]]
+      Online:      [[106, 57], [118, 64], [134, 74], [149, 85], [158, null]]
+  - id: pell
+    name: Pell eligibility
+    note: Pell status at entry, from the financial aid census file.
+    groups:
+      Pell-eligible: [[211, 125], [224, 136], [232, 143], [240, 150], [248, null]]
+      Not Pell:      [[269, 192], [264, 191], [268, 197], [271, 203], [276, null]]
+  - id: firstgen
+    name: First generation
+    note: Neither parent completed a bachelor's degree, as reported on the application.
+    groups:
+      First generation:      [[163, 96], [171, 104], [180, 113], [189, 122], [196, null]]
+      Continuing generation: [[317, 221], [317, 223], [320, 227], [322, 231], [328, null]]
+  - id: region
+    name: Home region
+    note: Permanent address at entry.
+    combine_into: Out of state
+    groups:
+      In state:      [[352, 238], [355, 245], [361, 252], [365, 259], [372, null]]
+      Out of state:  [[120, 75], [124, 77], [132, 82], [140, 88], [146, null]]
+      International: [[8, 4], [9, 5], [7, 6], [6, 6], [6, null]]
+
+gateway:
+  ENG 101 Composition I:          [[442, 56], [449, 51], [460, 64], [470, 65], [481, null]]
+  MATH 110 College Algebra:       [[278, 86], [283, 85], [290, 64], [296, 59], [304, null]]
+  BIB 110 Old Testament Survey:   [[422, 30], [429, 28], [440, 29], [450, 27], [461, null]]
+  PSY 101 General Psychology:     [[221, 27], [224, 26], [230, 26], [235, 26], [241, null]]
+  CHEM 111 General Chemistry I:   [[115, 31], [117, 32], [120, 34], [123, 36], [126, null]]
+  COM 101 Public Speaking:        [[192, 12], [195, 12], [200, 11], [204, 11], [210, null]]
+
+events:
+  - cohort: Fall 2024
+    course: MATH 110 College Algebra
+    what: MATH 110 moved to a corequisite model. Students who would have been placed in noncredit MATH 090 now take MATH 110 with a support lab in the same term.
+  - cohort: Fall 2025
+    course: CHEM 111 General Chemistry I
+    what: CHEM 111 lost its second lab instructor. Lab sections went from four to three, with the same number of students.
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" integrity="sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const MINUS = "−";
+  const pct = (x, d = 1) => x == null || !isFinite(x) ? "n/a" : (x < 0 ? MINUS : "") + Math.abs(x * 100).toFixed(d) + "%";
+  const pts = (x) => (x > 0.00049 ? "+" : x < -0.00049 ? MINUS : "") + Math.abs(x * 100).toFixed(1) + " pts";
+  const int = (n) => Math.round(Number(n)).toLocaleString();
+  const list = (a) => a.length <= 1 ? a.join("") : a.length === 2 ? a[0] + " and " + a[1] : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
+  const plural = (n, one, many) => int(n) + " " + (n === 1 ? one : many || one + "s");
+  const ORIGINAL = $("source-yaml").textContent.replace(/^\n/, "");
+  const SER = ["s1", "s2", "s3"];
+  const nextFall = (name) => { const m = String(name).match(/^(\D*)(\d{4})$/); return m ? m[1] + (+m[2] + 1) : "the next fall"; };
+  const short = (course) => String(course).split(" ").slice(0, 2).join(" ");
+
+  // ---- Model -----------------------------------------------------------
+  function build(text) {
+    if (typeof jsyaml === "undefined") throw new Error("The YAML parser did not load. Check your connection and reload the page.");
+    const d = jsyaml.load(text);
+    if (!d || typeof d !== "object") throw new Error("The source is empty.");
+    const st = d.settings || {};
+    ["goal", "approaching"].forEach((k) => { if (typeof st[k] !== "number" || st[k] <= 0 || st[k] >= 1) throw new Error("settings." + k + " must be a share between 0 and 1, such as 0.75."); });
+    if (st.approaching >= st.goal) throw new Error("settings.approaching must be below settings.goal.");
+    const minCell = Number.isInteger(st.min_cell) && st.min_cell > 0 ? st.min_cell : 10;
+    if (!Array.isArray(d.cohorts) || d.cohorts.length < 2) throw new Error("cohorts needs at least two rows.");
+    const cohorts = d.cohorts.map((c, i) => {
+      if (!Array.isArray(c) || c.length < 3) throw new Error("cohorts[" + i + "] needs: entry cohort, cohort size, retained count, DFW rate.");
+      const [name, size, ret, dfw] = c;
+      if (!Number.isInteger(size) || size <= 0) throw new Error(name + ": cohort size must be a whole number above 0.");
+      if (ret != null && (!Number.isInteger(ret) || ret < 0 || ret > size)) throw new Error(name + ": retained must be a whole number between 0 and the cohort size, or null if not yet observed.");
+      if (dfw != null && (typeof dfw !== "number" || dfw < 0 || dfw > 1)) throw new Error(name + ": DFW rate must be a share between 0 and 1, or null.");
+      return { i, name: String(name), size, ret: ret == null ? null : ret, dfw: dfw == null ? null : dfw, pending: ret == null };
+    });
+    if (!cohorts.some((c) => !c.pending)) throw new Error("At least one cohort needs an observed retained count.");
+    const nC = cohorts.length;
+    const pair = (where, v, ci) => {
+      if (!Array.isArray(v) || v.length !== nC) throw new Error(where + " needs one [size, count] pair per cohort (" + nC + ").");
+      return v.map((p, k) => { if (!Array.isArray(p) || !Number.isInteger(p[0]) || p[0] < 0) throw new Error(where + ", " + cohorts[k].name + ": size must be a whole number."); if (p[1] != null && (!Number.isInteger(p[1]) || p[1] < 0 || p[1] > p[0])) throw new Error(where + ", " + cohorts[k].name + ": the count must be between 0 and the size."); return [p[0], p[1] == null ? null : p[1]]; });
+    };
+    const dims = (d.dimensions || []).map((dm, j) => {
+      if (!dm || !dm.id || !dm.groups || typeof dm.groups !== "object") throw new Error("dimensions[" + j + "] needs an id, a name, and groups.");
+      const groups = Object.entries(dm.groups).map(([name, v]) => ({ name, vals: pair(dm.name + " / " + name, v) }));
+      cohorts.forEach((c, k) => {
+        const s = groups.reduce((a, g) => a + g.vals[k][0], 0);
+        if (s !== c.size) throw new Error(dm.name + ", " + c.name + ": group sizes add to " + s + ", but the cohort has " + c.size + ".");
+        if (!c.pending) { if (groups.some((g) => g.vals[k][1] == null)) throw new Error(dm.name + ", " + c.name + ": every group needs a retained count once the cohort is observed."); const r = groups.reduce((a, g) => a + g.vals[k][1], 0); if (r !== c.ret) throw new Error(dm.name + ", " + c.name + ": retained counts add to " + r + ", but the cohort retained " + c.ret + "."); }
+      });
+      return { id: String(dm.id), name: String(dm.name || dm.id), note: dm.note || "", into: dm.combine_into && dm.groups[dm.combine_into] ? String(dm.combine_into) : null, groups };
+    });
+    const gateway = Object.entries(d.gateway || {}).map(([name, v]) => ({ name, vals: pair("gateway / " + name, v) }));
+    const events = (d.events || []).filter((e) => e && e.what);
+    return { meta: d.meta || {}, cohorts, dims, gateway, events, defaults: { goal: st.goal, approaching: st.approaching, min_cell: minCell, combine: st.combine_small === true } };
+  }
+
+  const status = (rate, S) => rate == null ? { status: "Not yet observed", cls: "muted" } : rate >= S.goal - 1e-12 ? { status: "At goal", cls: "ok" } : rate >= S.approaching - 1e-12 ? { status: "Approaching", cls: "warn" } : { status: "Below goal", cls: "crit" };
+  function scoreCohorts(M, S) {
+    return M.cohorts.map((c) => { const rate = c.pending ? null : c.ret / c.size; return Object.assign({}, c, { rate, notRet: c.pending ? null : c.size - c.ret, toGoal: c.pending ? null : Math.max(0, Math.ceil(S.goal * c.size - 1e-9) - c.ret) }, status(rate, S)); });
+  }
+  const observed = (C) => C.filter((c) => !c.pending);
+
+  // Groups for one dimension: combine if asked, then suppress small cells and their complements.
+  function scoreGroups(M, S, dim, C) {
+    let groups = dim.groups.map((g) => ({ name: g.name, vals: g.vals.map((p) => p.slice()), parts: [g.name] }));
+    let combined = [];
+    if (S.combine && dim.into) {
+      const target = groups.find((g) => g.name === dim.into);
+      groups = groups.filter((g) => {
+        if (g === target || !g.vals.some((p) => p[0] < S.min_cell)) return true;
+        g.vals.forEach((p, k) => { target.vals[k][0] += p[0]; if (p[1] != null) target.vals[k][1] = (target.vals[k][1] ?? 0) + p[1]; });
+        target.parts.push(g.name); combined.push(g.name); return false;
+      });
+    }
+    const cells = groups.map((g) => g.vals.map((p, k) => ({ size: p[0], ret: p[1], rate: C[k].pending || !p[0] ? null : p[1] / p[0], hidden: null, pending: C[k].pending })));
+    C.forEach((c, k) => {
+      if (c.pending) return;
+      const small = cells.map((row, gi) => [gi, row[k]]).filter(([, x]) => x.size < S.min_cell);
+      small.forEach(([, x]) => (x.hidden = "small"));
+      if (small.length === 1 && groups.length > 1) {
+        const rest = cells.map((row, gi) => [gi, row[k]]).filter(([, x]) => !x.hidden).sort((a, b) => a[1].size - b[1].size);
+        if (rest.length) rest[0][1].hidden = "complement";
+      }
+    });
+    const O = observed(C), f = O[0].i, l = O[O.length - 1].i;
+    const anyHidden = (k) => cells.some((row) => row[k].hidden);
+    let fixed = null;
+    if (O.length > 1 && !anyHidden(f) && !anyHidden(l)) fixed = groups.reduce((a, g, gi) => a + (cells[gi][f].size / C[f].size) * (cells[gi][l].rate ?? 0), 0);
+    return { groups: groups.map((g, gi) => ({ name: g.name, parts: g.parts, cls: SER[gi] || "all", cells: cells[gi] })), combined, fixed, f, l };
+  }
+
+  function scoreGateway(M, C) {
+    const O = observed(C).filter((c) => M.gateway.every((g) => g.vals[c.i][1] != null));
+    const rows = M.gateway.map((g) => ({ name: g.name, vals: g.vals, rate: (k) => g.vals[k][1] == null || !g.vals[k][0] ? null : g.vals[k][1] / g.vals[k][0] }));
+    const tot = (k, skip) => rows.reduce((a, r) => (r === skip ? a : [a[0] + r.vals[k][0], a[1] + (r.vals[k][1] || 0)]), [0, 0]);
+    return { rows, O, tot };
+  }
+
+  // ---- State and controls ----------------------------------------------
+  let M, S, dimId, gwSort = "change", gwDir = 1;
+  const cloneS = (x) => Object.assign({}, x);
+  const SLIDERS = [
+    { k: "goal", label: "Goal", min: 0.6, max: 0.9, step: 0.01 },
+    { k: "approaching", label: "Approaching from", min: 0.5, max: 0.89, step: 0.01 },
+  ];
+  const PRESETS = () => [
+    { id: "defaults", label: "Defaults (75% and 70%)", set: { goal: M.defaults.goal, approaching: M.defaults.approaching } },
+    { id: "near", label: "Nearer goal (72% and 68%)", set: { goal: 0.72, approaching: 0.68 } },
+    { id: "stretch", label: "Stretch goal (80% and 75%)", set: { goal: 0.8, approaching: 0.75 } },
+  ];
+  function renderControls() {
+    $("sliders").innerHTML = SLIDERS.map((s) => '<div class="slider"><label for="s-' + s.k + '"><span>' + esc(s.label) + '</span><output id="o-' + s.k + '" for="s-' + s.k + '"></output></label><input type="range" id="s-' + s.k + '" data-k="' + s.k + '" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '"></div>').join("");
+    $("presets").innerHTML = PRESETS().map((p) => '<button type="button" class="chipbtn" data-preset="' + p.id + '" aria-pressed="false">' + esc(p.label) + "</button>").join("");
+    $("dims").innerHTML = M.dims.map((d) => '<button type="button" class="chipbtn" data-dim="' + esc(d.id) + '" aria-pressed="false">' + esc(d.name) + "</button>").join("");
+    if (!M.dims.some((d) => d.id === dimId)) dimId = M.dims.length ? M.dims[0].id : null;
+  }
+  function syncControls() {
+    SLIDERS.forEach((s) => { const el = $("s-" + s.k), o = $("o-" + s.k), v = S[s.k]; el.value = String(v); const t = pct(v, 0); el.setAttribute("aria-valuetext", t); o.textContent = t; o.classList.toggle("changed", Math.abs(v - M.defaults[s.k]) > 1e-9); });
+    document.querySelectorAll("[data-preset]").forEach((b) => { const p = PRESETS().find((x) => x.id === b.dataset.preset); b.setAttribute("aria-pressed", String(Math.abs(p.set.goal - S.goal) < 1e-9 && Math.abs(p.set.approaching - S.approaching) < 1e-9)); });
+    document.querySelectorAll("[data-dim]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.dim === dimId)));
+    $("s-min").value = String(S.min_cell); $("o-min").textContent = plural(S.min_cell, "student"); $("s-min").setAttribute("aria-valuetext", plural(S.min_cell, "student")); $("o-min").classList.toggle("changed", S.min_cell !== M.defaults.min_cell);
+    $("combine").checked = S.combine;
+  }
+
+  // ---- Shared drawing ---------------------------------------------------
+  const stat = (n, k, cls) => '<div class="stat ' + (cls || "") + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>";
+  const pill = (a) => '<span class="pill ' + a.cls + '">' + esc(a.status) + "</span>";
+  // Spread end labels so none overlap.
+  function spread(items, gap, top, bottom) {
+    const s = items.slice().sort((a, b) => a.y - b.y);
+    for (let i = 1; i < s.length; i++) if (s[i].y - s[i - 1].y < gap) s[i].y = s[i - 1].y + gap;
+    for (let i = s.length - 1; i >= 0; i--) { const lim = i === s.length - 1 ? bottom : s[i + 1].y - gap; if (s[i].y > lim) s[i].y = lim; }
+    if (s.length && s[0].y < top) { s[0].y = top; for (let i = 1; i < s.length; i++) if (s[i].y - s[i - 1].y < gap) s[i].y = s[i - 1].y + gap; }
+    return items;
+  }
+  // Lines across cohorts on one retention scale. series: [{name, cls, dash, vals: [rate|null per cohort]}]
+  function linesSVG(C, series, opts) {
+    const W = 940, H = opts.height || 380, L = 56, R = 190, T = 26, B = 40;
+    const vals = series.flatMap((s) => s.vals.filter((v) => v != null));
+    const lo = Math.max(0, Math.floor((Math.min(S.approaching, ...vals) - 0.04) * 20) / 20), hi = Math.min(1, Math.ceil((Math.max(S.goal, ...vals) + 0.03) * 20) / 20);
+    const X = (k) => L + (C.length === 1 ? 0.5 : k / (C.length - 1)) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    let g = '<rect class="zone crit" x="' + L + '" width="' + (W - L - R) + '" y="' + Y(S.approaching) + '" height="' + (Y(lo) - Y(S.approaching)) + '"/>' +
+      '<rect class="zone warn" x="' + L + '" width="' + (W - L - R) + '" y="' + Y(S.goal) + '" height="' + (Y(S.approaching) - Y(S.goal)) + '"/>' +
+      '<rect class="zone ok" x="' + L + '" width="' + (W - L - R) + '" y="' + Y(hi) + '" height="' + (Y(S.goal) - Y(hi)) + '"/>';
+    for (let v = lo; v <= hi + 1e-9; v += 0.05) g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/><text class="tick" x="' + (L - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + pct(v, 0) + "</text>";
+    g += '<line class="bandline" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(S.goal) + '" y2="' + Y(S.goal) + '"/><text class="reflabel" x="' + (L + 6) + '" y="' + (Y(S.goal) - 6) + '">Goal ' + pct(S.goal, 0) + "</text>";
+    C.forEach((c, k) => {
+      g += '<text class="tick" x="' + X(k) + '" y="' + (H - B + 22) + '" text-anchor="middle">' + esc(c.name) + "</text>";
+      if (c.pending) g += '<line class="grid" x1="' + X(k) + '" x2="' + X(k) + '" y1="' + T + '" y2="' + (H - B) + '" stroke-dasharray="3 4"/><text class="pendlabel" x="' + X(k) + '" y="' + (T + 14) + '" text-anchor="middle">Not yet observed</text><text class="pendlabel" x="' + X(k) + '" y="' + (T + 30) + '" text-anchor="middle">Second fall: ' + esc(nextFall(c.name)) + "</text>";
+    });
+    const ends = [];
+    series.forEach((s) => {
+      let d = "", pen = false;
+      s.vals.forEach((v, k) => { if (v == null) { pen = false; return; } d += (pen ? "L" : "M") + X(k).toFixed(1) + "," + Y(v).toFixed(1) + " "; pen = true; });
+      g += '<path class="ser ' + s.cls + (s.dash ? " dash" : "") + '" d="' + d + '"/>';
+      s.vals.forEach((v, k) => { if (v == null) return; g += '<circle class="mk ' + s.cls + '" cx="' + X(k) + '" cy="' + Y(v) + '" r="' + (s.dash ? 4 : 5.5) + '"><title>' + esc(s.name + ", " + C[k].name + ": " + pct(v) + " retained") + "</title></circle>"; if (opts.valueLabels && !s.dash) g += '<text class="vlabel" x="' + X(k) + '" y="' + (Y(v) - 12) + '" text-anchor="middle">' + pct(v) + "</text>"; });
+      let last = -1; s.vals.forEach((v, k) => { if (v != null) last = k; });
+      if (last >= 0) ends.push({ s, x: X(last), y: Y(s.vals[last]) + 4, v: s.vals[last] });
+    });
+    spread(ends, 16, T + 8, H - B);
+    const lx = X(observed(C).length ? observed(C)[observed(C).length - 1].i : 0);
+    ends.forEach((e) => (g += '<text class="plabel" x="' + (Math.max(e.x, lx) + 12) + '" y="' + e.y + '">' + esc(e.s.name) + " " + pct(e.v) + "</text>"));
+    const label = (opts.label || "Retention by cohort") + ". " + series.map((s) => s.name + ": " + C.map((c, k) => c.name + " " + (s.vals[k] == null ? (c.pending ? "not yet observed" : "hidden") : pct(s.vals[k]))).join(", ")).join("; ") + ".";
+    return '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+  }
+
+  // ---- Views -------------------------------------------------------------
+  function renderScorecard(C) {
+    const O = observed(C), first = O[0], last = O[O.length - 1], pend = C.filter((c) => c.pending);
+    const below = O.filter((c) => c.status !== "At goal");
+    let s = "Retention to the second fall " + (last.rate >= first.rate ? "rose" : "fell") + " from <strong>" + pct(first.rate) + "</strong> for the " + esc(first.name) + " cohort to <strong>" + pct(last.rate) + "</strong> for " + esc(last.name) + ", against a " + pct(S.goal, 0) + " goal. ";
+    s += below.length === O.length ? "Every completed cohort is below goal. " : below.length ? plural(below.length, "completed cohort is", "completed cohorts are") + " short of goal. " : "Every completed cohort is at goal. ";
+    s += last.toGoal ? esc(last.name) + " would have needed <strong>" + plural(last.toGoal, "more student") + "</strong> to return to reach it." : esc(last.name) + " reached it.";
+    if (pend.length) s += " " + list(pend.map((c) => esc(c.name) + "'s " + int(c.size) + " students")) + " " + (pend.length === 1 ? "aren't" : "aren't") + " counted until " + list(pend.map((c) => esc(nextFall(c.name)))) + ".";
+    $("sc-narrative").innerHTML = s;
+    const change = last.rate - first.rate;
+    $("sc-stats").innerHTML = stat(pct(last.rate), last.name + " retained; goal " + pct(S.goal, 0), last.cls) + stat(pts(change), "Since " + first.name) + stat(int(last.toGoal), "Students short of goal, " + last.name, last.toGoal ? "warn" : "ok") +
+      stat(int(O.reduce((a, c) => a + c.notRet, 0)), "Students not retained, " + O.length + " cohorts") + stat(below.length + " of " + O.length, "Completed cohorts below goal", below.length ? "warn" : "ok");
+    $("sc-chart").innerHTML = linesSVG(C, [{ name: "All students", cls: "all", vals: C.map((c) => c.rate) }], { valueLabels: true, label: "Line chart of retention to the second fall by entry cohort" });
+    $("sc-table").innerHTML = "<caption class='sr'>Retention by entry cohort</caption><thead><tr><th scope='col'>Entry cohort</th><th scope='col' class='num'>Cohort size</th><th scope='col' class='num'>Retained</th><th scope='col' class='num'>Not retained</th><th scope='col' class='num'>Students to goal</th><th scope='col' class='num'>Gateway DFW</th><th scope='col'>Status</th></tr></thead><tbody>" +
+      C.map((c) => '<tr><th scope="row">' + esc(c.name) + '</th><td class="num">' + int(c.size) + '</td><td class="num">' + (c.pending ? "—" : "<strong>" + pct(c.rate) + '</strong><span class="sub">' + int(c.ret) + " of " + int(c.size) + "</span>") + '</td><td class="num">' + (c.pending ? "—" : int(c.notRet)) + '</td><td class="num">' + (c.pending ? "—" : c.toGoal ? int(c.toGoal) : "—") + '</td><td class="num">' + (c.dfw == null ? "—" : pct(c.dfw)) + '</td><td class="status-cell">' + pill(c) + (c.pending ? '<span class="sub">Second fall: ' + esc(nextFall(c.name)) + "</span>" : "") + "</td></tr>").join("") + "</tbody>";
+  }
+
+  function renderGroups(C) {
+    const dim = M.dims.find((d) => d.id === dimId);
+    if (!dim) { $("g-narrative").textContent = "The source file has no dimensions to split by."; ["g-narrative2", "g-stats", "g-chart", "g-legend", "g-table"].forEach((id) => ($(id).innerHTML = "")); return; }
+    const G = scoreGroups(M, S, dim, C), f = C[G.f], l = C[G.l];
+    $("combine").disabled = !dim.into;
+    $("combine-note").textContent = dim.into ? "Folds any group below the smallest size into " + dim.into + "." : "This dimension has no group to fold small ones into.";
+    const vis = G.groups.filter((g) => !g.cells[G.l].hidden).sort((a, b) => b.cells[G.l].rate - a.cells[G.l].rate);
+    let s = "";
+    if (vis.length) s += "In " + esc(l.name) + ", " + list(vis.map((g) => esc(g.name) + " retained <strong>" + pct(g.cells[G.l].rate) + "</strong>")) + ". ";
+    const both = G.groups.filter((g) => !g.cells[G.f].hidden && !g.cells[G.l].hidden);
+    if (G.f !== G.l && both.length) s += "Change since " + esc(f.name) + ": " + list(both.map((g) => esc(g.name) + " " + pts(g.cells[G.l].rate - g.cells[G.f].rate)).concat(["all students " + pts(l.rate - f.rate)])) + ". ";
+    const atGoal = vis.filter((g) => g.cells[G.l].rate >= S.goal - 1e-12), near = vis.filter((g) => g.cells[G.l].rate < S.goal - 1e-12 && g.cells[G.l].rate >= S.approaching - 1e-12);
+    if (atGoal.length) s += list(atGoal.map((g) => esc(g.name))) + (atGoal.length === 1 ? " is" : " are") + " at goal. "; else if (near.length) s += list(near.map((g) => esc(g.name))) + (near.length === 1 ? " is" : " are") + " approaching goal. ";
+    $("g-narrative").innerHTML = s;
+    let s2 = "";
+    const hidden = G.groups.filter((g) => g.cells.some((c) => c.hidden === "small")), comp = G.groups.filter((g) => g.cells.some((c) => c.hidden === "complement"));
+    if (G.combined.length) s2 += list(G.combined.map(esc)) + (G.combined.length === 1 ? " has" : " have") + " fewer than " + plural(S.min_cell, "student") + " in at least one cohort, so " + (G.combined.length === 1 ? "it is" : "they are") + " counted with " + esc(dim.into) + ". ";
+    if (hidden.length) {
+      const every = hidden.every((g) => observed(C).every((c) => g.cells[c.i].hidden));
+      s2 += list(hidden.map((g) => esc(g.name))) + (hidden.length === 1 ? " has" : " have") + " fewer than " + plural(S.min_cell, "student") + " in " + (every ? "every" : "some") + " cohort, so " + (hidden.length === 1 ? "its" : "their") + " retention isn't shown. ";
+      if (comp.length) s2 += "Showing every other group would let anyone work it out by subtracting from the cohort total, so " + list(comp.map((g) => esc(g.name))) + (comp.length === 1 ? " is" : " are") + " hidden too. ";
+      if (dim.into && !S.combine) s2 += "Combining small groups folds " + list(hidden.map((g) => esc(g.name))) + " into " + esc(dim.into) + " and shows both. ";
+    }
+    if (G.fixed != null && G.f !== G.l) {
+      const mix = l.rate - G.fixed;
+      const shifts = G.groups.map((g) => ({ g, a: g.cells[G.f].size / f.size, b: g.cells[G.l].size / l.size })).sort((x, y) => (y.b - y.a) - (x.b - x.a))[0];
+      if (Math.abs(mix) >= 0.003) s2 += "Changes in who enrolls moved the overall rate by <strong>" + pts(mix) + "</strong>: at " + esc(f.name) + "'s mix of groups, " + esc(l.name) + " would have retained " + pct(G.fixed) + ". " + esc(shifts.g.name) + " went from " + pct(shifts.a, 0) + " to " + pct(shifts.b, 0) + " of the cohort.";
+      else s2 += "Changes in who enrolls moved the overall rate by less than half a point, so the groups' own rates explain the trend.";
+    } else if (hidden.length && G.f !== G.l) s2 += "The fixed-mix comparison needs every group, so it isn't computed here.";
+    $("g-narrative2").innerHTML = s2;
+    const gapL = vis.length > 1 ? vis[0].cells[G.l].rate - vis[vis.length - 1].cells[G.l].rate : null;
+    const top = vis[0], bot = vis[vis.length - 1];
+    const gapF = vis.length > 1 && !top.cells[G.f].hidden && !bot.cells[G.f].hidden ? top.cells[G.f].rate - bot.cells[G.f].rate : null;
+    $("g-stats").innerHTML = (gapL != null ? stat(pts(gapL).replace("+", ""), "Gap, " + top.name + " to " + bot.name + ", " + l.name) : "") + (gapF != null ? stat(pts(gapF).replace("+", ""), "Same gap, " + f.name) : "") +
+      stat(G.fixed == null ? "—" : pct(G.fixed), l.name + " at " + f.name + "'s mix") + stat(int(G.groups.reduce((a, g) => a + g.cells.filter((c) => c.hidden).length, 0)), "Cells hidden", G.groups.some((g) => g.cells.some((c) => c.hidden)) ? "warn" : "");
+    $("g-title").textContent = "Retained to the second fall, by " + dim.name.toLowerCase();
+    $("g-cap").textContent = (dim.note ? dim.note + " " : "") + "The dashed line is all students. A hidden cell leaves a gap in its line.";
+    const series = G.groups.map((g) => ({ name: g.name, cls: g.cls, vals: g.cells.map((c) => (c.hidden ? null : c.rate)) })).concat([{ name: "All students", cls: "all", dash: true, vals: C.map((c) => c.rate) }]);
+    $("g-chart").innerHTML = linesSVG(C, series, { label: "Line chart of retention by " + dim.name.toLowerCase() + " and entry cohort" });
+    $("g-legend").innerHTML = series.filter((x) => x.vals.some((v) => v != null)).map((x) => '<span><i class="lvl ' + x.cls + (x.dash ? " dash" : "") + '"></i>' + esc(x.name) + "</span>").join("");
+    $("g-table-title").textContent = dim.name + ", every cohort";
+    const cell = (c) => c.pending ? '<td class="num">' + (c.size < S.min_cell ? "Fewer than " + S.min_cell : int(c.size)) + '<span class="sub">Not yet observed</span></td>' :
+      c.hidden ? '<td class="num hid">Hidden<span class="cellnote">' + (c.hidden === "small" ? "Fewer than " + plural(S.min_cell, "student") : "Would reveal a small group") + "</span></td>" :
+      '<td class="num"><strong>' + pct(c.rate) + '</strong><span class="sub">' + int(c.ret) + " of " + int(c.size) + "</span></td>";
+    $("g-table").innerHTML = "<caption class='sr'>Retention by " + esc(dim.name.toLowerCase()) + " and entry cohort</caption><thead><tr><th scope='col'>Group</th>" + C.map((c) => "<th scope='col' class='num'>" + esc(c.name) + "</th>").join("") + "</tr></thead><tbody>" +
+      G.groups.map((g) => '<tr><th scope="row"><i class="lvl ' + g.cls + '"></i>' + esc(g.name) + (g.parts.length > 1 ? '<span class="sub">Includes ' + esc(list(g.parts.slice(1))) + "</span>" : "") + "</th>" + g.cells.map(cell).join("") + "</tr>").join("") +
+      '<tr><th scope="row">All students</th>' + C.map((c) => '<td class="num">' + (c.pending ? int(c.size) + '<span class="sub">Not yet observed</span>' : "<strong>" + pct(c.rate) + '</strong><span class="sub">' + int(c.ret) + " of " + int(c.size) + "</span>") + "</td>").join("") + "</tr></tbody>";
+  }
+
+  function renderGateway(C) {
+    const W = scoreGateway(M, C);
+    if (!W.rows.length || W.O.length < 1) { $("gw-narrative").textContent = "The source file has no gateway-course grades for an observed cohort."; ["gw-narrative2", "gw-stats", "gw-chart", "gw-table"].forEach((id) => ($(id).innerHTML = "")); return; }
+    const f = W.O[0].i, l = W.O[W.O.length - 1].i, F = C[f], Lc = C[l];
+    const rate = (t) => (t[0] ? t[1] / t[0] : null);
+    const all = (k) => rate(W.tot(k));
+    const ev = (r, k) => M.events.find((e) => e.course === r.name && (k == null || e.cohort === C[k].name));
+    const evAny = (r) => M.events.find((e) => e.course === r.name && C.some((c) => c.name === e.cohort && c.i > f && c.i <= l));
+    const rows = W.rows.map((r) => ({ r, a: r.rate(f), b: r.rate(l), ch: r.rate(l) - r.rate(f), encL: r.vals[l][0], dfwL: r.vals[l][1], e: evAny(r) }));
+    const totL = W.tot(l);
+    rows.forEach((x) => { x.shareEnr = x.encL / totL[0]; x.shareDfw = totL[1] ? x.dfwL / totL[1] : 0; });
+    const drop = rows.slice().sort((a, b) => a.ch - b.ch)[0], rise = rows.slice().sort((a, b) => b.ch - a.ch)[0];
+    const total = all(l) - all(f);
+    let s = "First-year DFW in gateway courses " + (total <= 0 ? "fell" : "rose") + " from <strong>" + pct(all(f)) + "</strong> for " + esc(F.name) + " to <strong>" + pct(all(l)) + "</strong> for " + esc(Lc.name) + ". ";
+    if (drop && drop.ch < 0) {
+      const restF = rate(W.tot(f, drop.r)), restL = rate(W.tot(l, drop.r));
+      s += (Math.abs(restL - restF) < Math.abs(total) / 2 && total < 0 ? "Most of that is one course. " : "The largest drop is in one course. ") + "<strong>" + esc(short(drop.r.name)) + "</strong> went from " + pct(drop.a) + " to " + pct(drop.b) + ". ";
+      if (drop.e) s += "Recorded for " + esc(drop.e.cohort) + ": " + esc(drop.e.what) + " ";
+      s += "Without " + esc(short(drop.r.name)) + ", the rate went from " + pct(restF) + " to " + pct(restL) + ".";
+    }
+    $("gw-narrative").innerHTML = s;
+    let s2 = "";
+    if (rise && rise.ch > 0.0005) { s2 += esc(short(rise.r.name)) + " is moving the other way, from " + pct(rise.a) + " to " + pct(rise.b) + ". "; if (rise.e) s2 += "Recorded for " + esc(rise.e.cohort) + ": " + esc(rise.e.what) + " "; }
+    const heavy = rows.filter((x) => x.shareDfw - x.shareEnr > 0.03).sort((a, b) => (b.shareDfw - b.shareEnr) - (a.shareDfw - a.shareEnr));
+    if (heavy.length) s2 += "In " + esc(Lc.name) + ", " + list(heavy.map((x) => esc(short(x.r.name)) + " is " + pct(x.shareEnr, 0) + " of gateway enrollments and " + pct(x.shareDfw, 0) + " of DFW grades")) + ". ";
+    if (F.rate != null && Lc.rate != null && F !== Lc) s2 += "Retention " + (Lc.rate >= F.rate ? "rose" : "fell") + " across the same cohorts, from " + pct(F.rate) + " to " + pct(Lc.rate) + ".";
+    $("gw-narrative2").innerHTML = s2;
+    const recon = W.O.every((c) => c.dfw == null || Math.abs(all(c.i) - c.dfw) < 0.0005);
+    $("gw-stats").innerHTML = stat(pct(all(l)), "Gateway DFW, " + Lc.name) + stat(pts(total), "Since " + F.name, total <= 0 ? "ok" : "crit") + stat(int(totL[1]), "DFW grades, " + Lc.name) + stat(int(W.rows.length), "Gateway courses") +
+      stat(recon ? "Yes" : "No", "Reconciles to the cohort table", recon ? "ok" : "crit");
+    // Slope chart
+    const Wd = 940, H = 60 + rows.length * 46, Lx = 300, Rx = 640, T = 40, B = 24;
+    const vals = rows.flatMap((x) => [x.a, x.b]), hi = Math.ceil((Math.max(...vals) + 0.02) * 20) / 20, lo = Math.max(0, Math.floor((Math.min(...vals) - 0.02) * 20) / 20);
+    const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    let g = '<text class="colhead" x="' + Lx + '" y="20" text-anchor="middle">' + esc(F.name) + '</text><text class="colhead" x="' + Rx + '" y="20" text-anchor="middle">' + esc(Lc.name) + "</text>";
+    g += '<line class="grid" x1="' + Lx + '" x2="' + Lx + '" y1="' + T + '" y2="' + (H - B) + '"/><line class="grid" x1="' + Rx + '" x2="' + Rx + '" y1="' + T + '" y2="' + (H - B) + '"/>';
+    const left = spread(rows.map((x) => ({ x, y: Y(x.a) + 4 })), 17, T, H - B), right = spread(rows.map((x) => ({ x, y: Y(x.b) + 4 })), 17, T, H - B);
+    rows.filter((x) => !x.e).concat(rows.filter((x) => x.e)).forEach((x) => {
+      const hl = x.e ? " hl" : "";
+      g += '<line class="slopeln' + hl + '" x1="' + Lx + '" y1="' + Y(x.a) + '" x2="' + Rx + '" y2="' + Y(x.b) + '"/>';
+      g += '<circle class="slopedot' + hl + '" cx="' + Lx + '" cy="' + Y(x.a) + '" r="5.5"><title>' + esc(x.r.name + ", " + F.name + ": " + pct(x.a) + " DFW") + '</title></circle><circle class="slopedot' + hl + '" cx="' + Rx + '" cy="' + Y(x.b) + '" r="5.5"><title>' + esc(x.r.name + ", " + Lc.name + ": " + pct(x.b) + " DFW") + "</title></circle>";
+    });
+    left.forEach((p) => (g += '<text class="rowlabel' + (p.x.e ? "" : " dim") + '" x="' + (Lx - 14) + '" y="' + p.y + '" text-anchor="end">' + esc(p.x.r.name) + "  " + pct(p.x.a) + "</text>"));
+    right.forEach((p) => (g += '<text class="rowlabel' + (p.x.e ? "" : " dim") + '" x="' + (Rx + 14) + '" y="' + p.y + '">' + pct(p.x.b) + "  " + esc(short(p.x.r.name)) + " (" + pts(p.x.ch) + ")</text>"));
+    const label = "Slope chart of DFW rate by gateway course, " + F.name + " to " + Lc.name + ". " + rows.map((x) => x.r.name + " " + pct(x.a) + " to " + pct(x.b)).join("; ") + ".";
+    $("gw-title").textContent = "DFW rate by gateway course, " + F.name + " to " + Lc.name;
+    $("gw-chart").innerHTML = '<svg viewBox="0 0 ' + Wd + " " + H + '" role="img" aria-label="' + esc(label) + '">' + g + "</svg>";
+    const cols = [
+      { k: "name", label: "Course", get: (x) => x.r.name.toLowerCase() }, { k: "enr", label: "Enrolled, " + Lc.name, num: true, get: (x) => x.encL },
+      { k: "b", label: "DFW, " + Lc.name, num: true, get: (x) => x.b }, { k: "a", label: "DFW, " + F.name, num: true, get: (x) => x.a },
+      { k: "change", label: "Change", num: true, get: (x) => x.ch }, { k: "se", label: "Share of enrollments", num: true, get: (x) => x.shareEnr }, { k: "sd", label: "Share of DFW grades", num: true, get: (x) => x.shareDfw },
+    ];
+    const c = cols.find((x) => x.k === gwSort) || cols[4];
+    const sorted = rows.slice().sort((a, b) => { const x = c.get(a), y = c.get(b); return (x < y ? -1 : x > y ? 1 : 0) * gwDir || a.r.name.localeCompare(b.r.name); });
+    $("gw-table").innerHTML = "<caption class='sr'>DFW by gateway course</caption><thead><tr>" + cols.map((k) => '<th scope="col"' + (k.num ? ' class="num"' : "") + ' aria-sort="' + (k.k === c.k ? (gwDir < 0 ? "descending" : "ascending") : "none") + '"><button type="button" data-sort="' + k.k + '">' + esc(k.label) + "</button></th>").join("") + "</tr></thead><tbody>" +
+      sorted.map((x) => '<tr><th scope="row">' + esc(x.r.name) + (x.e ? '<span class="note">' + esc(x.e.cohort + ": " + x.e.what) + "</span>" : "") + '</th><td class="num">' + int(x.encL) + '</td><td class="num"><strong>' + pct(x.b) + '</strong><span class="sub">' + int(x.dfwL) + " of " + int(x.encL) + '</span></td><td class="num">' + pct(x.a) + '</td><td class="num"><span class="move ' + (x.ch < -0.0005 ? "up" : x.ch > 0.0005 ? "down" : "same") + '">' + pts(x.ch) + '</span></td><td class="num">' + pct(x.shareEnr) + '</td><td class="num">' + pct(x.shareDfw) + "</td></tr>").join("") + "</tbody>";
+  }
+
+  function renderMeta(C) {
+    const O = observed(C);
+    $("meta").innerHTML = [["Cohorts", O[0].name + " to " + O[O.length - 1].name], ["Students", int(O.reduce((a, c) => a + c.size, 0))], ["Retained means", M.meta.retained_means], ["Steward", M.meta.steward], ["As of", M.meta.as_of]]
+      .filter(([, v]) => v != null && v !== "").map(([k, v]) => "<span>" + esc(k) + " <b>" + esc(v) + "</b></span>").join("");
+  }
+  function renderAll() { syncControls(); const C = scoreCohorts(M, S); renderMeta(C); renderScorecard(C); renderGroups(C); renderGateway(C); }
+
+  // ---- Tabs, source, events ---------------------------------------------
+  const TABS = ["scorecard", "groups", "gateway"];
+  const openSource = () => { const d = $("source"); d.open = true; d.scrollIntoView({ block: "start" }); };
+  function show(view, focus) {
+    if (view === "source") { openSource(); view = TABS.find((t) => !$(t).hidden) || "scorecard"; }
+    if (!TABS.includes(view)) view = "scorecard";
+    TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  }
+  const setHash = (v) => { try { history.replaceState(null, "", "#" + v); } catch (e) { /* not allowed here */ } };
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { setHash(b.dataset.view); show(b.dataset.view); } });
+  document.querySelector(".tabs").addEventListener("keydown", (e) => {
+    const i = TABS.indexOf(document.activeElement.dataset.view); if (i < 0) return;
+    const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+    if (j >= 0) { e.preventDefault(); setHash(TABS[j]); show(TABS[j], true); }
+  });
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  document.addEventListener("click", (e) => { const a = e.target.closest('a[href="#source"]'); if (!a) return; e.preventDefault(); setHash("source"); openSource(); $("source").querySelector("summary").focus(); });
+
+  $("sliders").addEventListener("input", (e) => {
+    const k = e.target.dataset.k; if (!k) return;
+    let v = parseFloat(e.target.value);
+    if (k === "approaching") v = Math.min(v, S.goal - 0.01);
+    if (k === "goal") { v = Math.max(v, 0.61); if (S.approaching >= v) S.approaching = Math.round((v - 0.01) * 100) / 100; }
+    S[k] = Math.round(v * 100) / 100; renderAll();
+  });
+  $("presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; Object.assign(S, PRESETS().find((p) => p.id === b.dataset.preset).set); renderAll(); });
+  $("dims").addEventListener("click", (e) => { const b = e.target.closest("[data-dim]"); if (!b) return; dimId = b.dataset.dim; renderAll(); const nb = document.querySelector('[data-dim="' + dimId + '"]'); if (nb) nb.focus(); });
+  $("s-min").addEventListener("input", (e) => { S.min_cell = parseInt(e.target.value, 10); renderAll(); });
+  $("combine").addEventListener("change", (e) => { S.combine = e.target.checked; renderAll(); $("combine").focus(); });
+  $("gw-table").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort]"); if (!b) return; const k = b.dataset.sort;
+    if (gwSort === k) gwDir = -gwDir; else { gwSort = k; gwDir = k === "name" || k === "change" ? 1 : -1; }
+    renderAll(); const nb = document.querySelector('#gw-table [data-sort="' + k + '"]'); if (nb) nb.focus();
+  });
+
+  const statusMsg = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
+  const load = (text) => { const next = build(text); M = next; S = cloneS(M.defaults); renderControls(); renderAll(); };
+  $("apply").addEventListener("click", () => { try { load($("yaml-src").value); statusMsg("Applied. " + plural(M.cohorts.length, "cohort") + ", " + plural(M.dims.length, "dimension") + ", " + plural(M.gateway.length, "gateway course") + ". The goal and group settings reset to the file's values.", "ok"); } catch (err) { statusMsg("Not applied. " + err.message, "err"); } });
+  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; load(ORIGINAL); statusMsg("Reset to the original source.", "ok"); });
+  $("copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("yaml-src").value); statusMsg("Copied to the clipboard.", "ok"); } catch (e) { $("yaml-src").select(); statusMsg("Select all and copy with your keyboard; this browser blocked clipboard access.", ""); } });
+
+  $("yaml-src").value = ORIGINAL;
+  try { load(ORIGINAL); } catch (err) { $("sc-narrative").textContent = err.message; }
+  show(location.hash.slice(1) || "scorecard");
+})();
+</script>
+</body>
+</html>
