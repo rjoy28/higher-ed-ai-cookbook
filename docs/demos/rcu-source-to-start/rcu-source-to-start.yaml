@@ -1,0 +1,145 @@
+# RCU Source-to-Start Reconciliation: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It joins what marketing
+# paid for with what admissions recorded, for one recruiting cycle, at the
+# segment level. Every number is a count or a dollar total. There are no
+# student rows here, and the page cannot produce any.
+#
+# Schema
+#   meta          institution, cycle, what a start means, attribution rule, as_of
+#   settings      tolerance: largest gap between a platform count and the admissions
+#                   count before a month is flagged (default 0.10)
+#                 min_gap: a month is flagged only if the counts also differ by at
+#                   least this many inquiries, so tiny months don't trip it (default 3)
+#                 min_starts: fewest starts a channel needs before the page prices
+#                   it per start (default 10)
+#                 allocate: false leaves unattributed web starts unattributed; true
+#                   shares them out (see Rules). A judgment call, so it defaults off.
+#   channels      where students come from. paid: true means media spend is tracked.
+#                 platform: the system that counts inquiries before admissions does.
+#   crosswalk     admissions source code -> channel id. null means nobody mapped it.
+#   spend         media spend by channel and segment for the cycle, from billing.
+#   admissions    by source code and segment: [inquiries, applications, starts].
+#   ties          segment totals the admissions rows must add up to (recipe 05).
+#   audit         by channel, one [platform count, admissions count] pair per month.
+#   fact_sources  the one named source for each stage, and who keeps it.
+#   events        changes a person recorded, so a flag has a reason next to it.
+#
+# Rules the page applies
+#   cost per stage   spend / that stage's count, by channel; shown only when the
+#                    channel has a mapped source code
+#   priced per start only when starts >= min_starts; otherwise "too few starts"
+#   gap              (platform - admissions) / platform; flagged when |gap| > tolerance
+#                    and |platform - admissions| >= min_gap
+#   allocation       in months where the unattributed web row is flagged, the excess
+#                    of admissions over the platform count is lost attribution. That
+#                    share of the unattributed pool (inquiries, applications, starts)
+#                    is split across website-form channels by their platform counts
+#                    in those months. Everything else stays unattributed.
+#   ties             each segment's admissions rows must add up to its tie row
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-10-15"
+  cycle: Fall 2026 starts (inquiries Sep 2025 to Aug 2026)
+  start_means: Enrolled at the fall census, from the registrar's census file
+  attribution: The first source the CRM recorded for the person (first touch)
+  segments: [Online UG, Graduate]
+  scope: Online undergraduate and graduate programs. Traditional undergraduate recruiting runs on travel and visits, not media, and is out of scope.
+  fixture: true
+
+settings:
+  tolerance: 0.10
+  min_gap: 3
+  min_starts: 10
+  allocate: false
+
+months: ["Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026", "Aug 2026"]
+
+channels:
+  - {id: google, name: Google Search, paid: true, platform: "GA4 form_submit, paid search", steward: Marketing}
+  - {id: meta, name: Meta lead forms, paid: true, platform: Meta lead export, steward: Marketing}
+  - {id: linkedin, name: LinkedIn, paid: true, platform: "GA4 form_submit, paid social", steward: Marketing}
+  - {id: vendor, name: Lead vendor, paid: true, platform: Vendor invoice, steward: Marketing}
+  - {id: youtube, name: YouTube pilot, paid: true, platform: "GA4 form_submit, paid video", steward: Marketing}
+  - {id: organic, name: Organic search, paid: false, platform: "GA4 form_submit, organic", steward: Marketing}
+  - {id: referral, name: Referral and alumni, paid: false, platform: null, steward: Admissions}
+  - {id: events, name: Events and info sessions, paid: false, platform: null, steward: Admissions}
+  - {id: web, name: Unattributed web, paid: false, unattributed: true, platform: "GA4 form_submit, direct and other", steward: Marketing}
+  - {id: other, name: '"Other" in the CRM', paid: false, unattributed: true, platform: null, steward: Admissions}
+
+crosswalk:
+  WEB-PPC: google
+  WEB-SOC: meta
+  WEB-LI: linkedin
+  LEADVEND: vendor
+  WEB-ORG: organic
+  REFERRAL: referral
+  EVENT: events
+  WEB: web
+  OTHER: other
+  WEB-YT: null
+
+spend:
+  google:   {Online UG: 52000, Graduate: 44000}
+  meta:     {Online UG: 31000, Graduate: 10000}
+  linkedin: {Online UG: 1500, Graduate: 17000}
+  vendor:   {Online UG: 18700, Graduate: 3850}
+  youtube:  {Online UG: 2500, Graduate: 1700}
+
+admissions:
+  #            Online UG [inq, app, start]   Graduate [inq, app, start]
+  WEB-PPC:  {Online UG: [462, 129, 30], Graduate: [344, 104, 28]}
+  WEB-SOC:  {Online UG: [380, 70, 14],  Graduate: [160, 27, 5]}
+  WEB-LI:   {Online UG: [10, 3, 1],     Graduate: [86, 28, 10]}
+  LEADVEND: {Online UG: [300, 48, 10],  Graduate: [62, 10, 2]}
+  WEB-YT:   {Online UG: [8, 1, 0],      Graduate: [6, 2, 0]}
+  WEB-ORG:  {Online UG: [150, 72, 26],  Graduate: [160, 88, 36]}
+  REFERRAL: {Online UG: [40, 30, 13],   Graduate: [80, 68, 36]}
+  EVENT:    {Online UG: [25, 20, 5],    Graduate: [60, 42, 16]}
+  WEB:      {Online UG: [210, 88, 27],  Graduate: [178, 80, 27]}
+  OTHER:    {Online UG: [118, 118, 32], Graduate: [102, 46, 8]}
+
+ties:
+  note: Fall 2026 inquiries, applications and enrolled from the Enrollment Funnel recipe (05).
+  Online UG: [1703, 579, 158]
+  Graduate:  [1238, 495, 168]
+
+audit:
+  google:   [[64, 60], [75, 70], [86, 80], [75, 70], [106, 99], [106, 99], [106, 99], [95, 89], [95, 89], [86, 8], [85, 8], [85, 35]]
+  meta:     [[33, 32], [39, 38], [44, 43], [39, 38], [56, 54], [56, 54], [87, 54], [50, 49], [50, 49], [44, 43], [44, 43], [44, 43]]
+  linkedin: [[7, 7], [9, 8], [11, 10], [9, 8], [13, 12], [13, 12], [13, 12], [12, 11], [12, 11], [10, 1], [10, 0], [10, 4]]
+  vendor:   [[24, 21], [29, 26], [33, 29], [28, 25], [41, 36], [41, 36], [41, 36], [37, 33], [37, 33], [33, 29], [33, 29], [33, 29]]
+  youtube:  [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [4, 4], [7, 6], [4, 4], [0, 0], [0, 0], [0, 0], [0, 0]]
+  organic:  [[25, 23], [29, 27], [33, 31], [29, 27], [41, 38], [41, 38], [41, 38], [36, 34], [36, 34], [33, 3], [33, 3], [32, 14]]
+  web:      [[6, 6], [7, 7], [10, 9], [7, 7], [12, 11], [12, 11], [12, 11], [11, 10], [11, 10], [10, 117], [9, 116], [9, 73]]
+
+fact_sources:
+  - {stage: Spend, source: "Ad platform billing and vendor invoices", steward: Marketing}
+  - {stage: Platform count, source: "GA4 form_submit for website forms; Meta's lead export; the vendor's invoice", steward: Marketing}
+  - {stage: Inquiry, source: Admissions CRM, steward: Admissions}
+  - {stage: Application, source: Admissions CRM, steward: Admissions}
+  - {stage: Start, source: "Registrar census file, through the funnel export", steward: Registrar}
+  - {stage: Channel of record, source: "CRM source code, read through the crosswalk", steward: "Admissions and Marketing, jointly"}
+
+events:
+  - month: Mar 2026
+    channel: meta
+    what: The integration account's password was rotated under the 90-day policy. The Meta lead sync stopped for nine days, and nobody was alerted.
+  - month: Jun 2026
+    channel: web
+    what: The refreshed program-page template went live without the hidden fields that carry a visitor's source into the inquiry form. The CRM codes a form with no source as plain WEB.
+  - month: Aug 2026
+    channel: web
+    what: An enrollment counselor asked why every summer inquiry said WEB. The fields were restored on August 19.
+  - month: Feb 2026
+    channel: youtube
+    what: Marketing ran a three-month YouTube pilot with its own source code, WEB-YT. The code was never added to the crosswalk.
+  - month: Sep 2025
+    channel: vendor
+    what: The vendor contract allows a credit for any lead already in the CRM in the prior 90 days, at the $55 lead price.
+  - month: Sep 2025
+    channel: other
+    what: The first entry in the CRM's source dropdown has been Other since the 2019 go-live. The online undergraduate application doesn't ask how a student heard about RCU, so an application with no prior inquiry is coded Other.

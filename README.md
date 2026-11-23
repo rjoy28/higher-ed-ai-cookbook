@@ -35,6 +35,7 @@ All sample data describes **Riverside Christian University (RCU)**, a fictional 
 | 16 | [Course Section Viability Analyzer](16_CourseSectionViability/) |
 | 17 | [Net Tuition Revenue & Discount Analyzer](17_NetTuitionDiscount/) |
 | 18 | [Strategic Plan KPI Scorecard](18_KPIScorecard/) |
+| 19 | [Source-to-Start Reconciliation](19_SourceToStart/) |
 
 ## How to use a recipe
 
