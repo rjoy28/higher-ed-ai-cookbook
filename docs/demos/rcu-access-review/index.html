@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RCU Access Review</title>
+<meta name="description" content="Staff access in a fictional university's student information system, set against the HR record. Propose roles from who holds what, then list what doesn't fit for a person to review.">
+<meta property="og:title" content="RCU Access Review">
+<meta property="og:description" content="Access is added when someone asks and removed when someone remembers. Propose roles from the access people actually hold, and find what's left over.">
+<meta property="og:image" content="https://rjoy28.github.io/higher-ed-ai-cookbook/demos/rcu-access-review/preview.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Same visual system as the RCU Systems Atlas and Portfolio Explorer, so the demos read as one set. */
+:root {
+  --bg: #f4f7f8; --surface: #ffffff; --ink: #14212b; --muted: #475763; --line: #d2dbe0; --accent: #0d6670;
+  --grad: #1f5fa8; --ug: #8a4b0f;
+  --crit: #b42318; --warn: #8f5400; --ok: #1d7a3a; --band: rgba(13,102,112,.09);
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e1418; --surface: #162027; --ink: #e5edf1; --muted: #a2b1ba; --line: #2b3a44; --accent: #5cc3cc;
+  --grad: #84b4ee; --ug: #e4a76a;
+  --crit: #ff8b7b; --warn: #f2b84b; --ok: #72d38f; --band: rgba(92,195,204,.12); color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 1rem; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); font-stretch: 85%; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.lede { color: var(--muted); max-width: 72ch; margin-top: 8px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font-size: 0.88rem; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 22px; border-bottom: 2px solid var(--line); }
+.tab { appearance: none; border: 0; background: none; color: var(--muted); font: 600 0.98rem var(--f-body); padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px; cursor: pointer; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+:is(.tab, button, input, textarea, a):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.panel { padding-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+
+.settings { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 14px; margin-top: 22px; }
+.settings-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.settings-note { font-size: 0.88rem; color: var(--muted); max-width: 90ch; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; }
+.slider { display: grid; gap: 2px; }
+.slider label { font-size: 0.86rem; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.slider output { font-family: var(--f-mono); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.slider output.changed { color: var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group > .lbl { font-size: 0.86rem; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.chipbtn { font: 600 0.88rem var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+.chipbtn:hover { border-color: var(--accent); }
+.chipbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn { font: 600 0.92rem var(--f-body); border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+
+.narrative { font-size: 1.12rem; max-width: 76ch; }
+.narrative + .narrative { margin-top: -10px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stat { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.stat .n { font-family: var(--f-display); font-stretch: 85%; font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-size: 0.84rem; color: var(--muted); }
+.stat.ok .n { color: var(--ok); } .stat.warn .n { color: var(--warn); } .stat.crit .n { color: var(--crit); }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.figure h3 { margin: 4px 4px 2px; }
+.figure .cap { color: var(--muted); font-size: 0.9rem; margin: 0 4px 6px; max-width: 80ch; }
+.svgbox { overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.tick { font: 12px var(--f-mono); fill: var(--muted); }
+.grid { stroke: var(--line); stroke-width: 1; }
+.axistitle { font: 600 12.5px var(--f-body); fill: var(--muted); }
+.bandrect { fill: var(--band); }
+.bandline { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.diag { stroke: var(--accent); stroke-width: 1.5; }
+.reflabel { font: 600 11.5px var(--f-mono); fill: var(--accent); }
+.pt { stroke: var(--surface); stroke-width: 1.5; }
+.pt.ug { fill: var(--ug); } .pt.grad { fill: var(--grad); }
+.pt.hollow { fill: var(--surface); stroke-width: 2; } .pt.hollow.ug { stroke: var(--ug); } .pt.hollow.grad { stroke: var(--grad); }
+.plabel { font: 600 11.5px var(--f-body); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.slope.ug { stroke: var(--ug); } .slope.grad { stroke: var(--grad); }
+.slope { stroke-width: 2; fill: none; opacity: .85; }
+.slope.dim { opacity: .3; }
+.rowlabel { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.rowlabel.dim { fill: var(--muted); font-weight: 400; }
+.colhead { font: 700 11.5px var(--f-mono); letter-spacing: .06em; fill: var(--muted); text-transform: uppercase; }
+.line-net { fill: none; stroke-width: 2.4; } .line-sticker { fill: none; stroke-width: 2; stroke-dasharray: 6 4; }
+.line-net.ug, .line-sticker.ug { stroke: var(--ug); } .line-net.grad, .line-sticker.grad { stroke: var(--grad); }
+.dot.ug { fill: var(--ug); } .dot.grad { fill: var(--grad); }
+.vlabel { font: 600 11.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { flex: none; }
+
+.section-head { display: grid; gap: 4px; }
+.section-head p { color: var(--muted); max-width: 76ch; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg); white-space: nowrap; }
+tbody th { font-weight: 600; color: var(--ink); background: none; min-width: 220px; }
+th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+th[aria-sort] button::after { content: "↕"; opacity: .45; }
+th[aria-sort="ascending"] button::after { content: "↑"; opacity: 1; }
+th[aria-sort="descending"] button::after { content: "↓"; opacity: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num { white-space: nowrap; }
+tr:last-child > * { border-bottom: 0; }
+.sub { color: var(--muted); font-size: 0.86rem; font-weight: 400; display: block; }
+.note { color: var(--ink); font-size: 0.84rem; font-weight: 400; display: block; font-style: italic; max-width: 46ch; margin-top: 0.35rem; line-height: 1.4; }
+.move { display: block; font-size: 0.84rem; font-weight: 600; }
+.move.up { color: var(--ok); } .move.down { color: var(--crit); } .move.same { color: var(--muted); font-weight: 400; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1.5px solid currentColor; white-space: nowrap; }
+.pill.ok { color: var(--ok); } .pill.crit { color: var(--crit); } .pill.warn { color: var(--warn); } .pill.muted { color: var(--muted); } .pill.tag { color: var(--accent); }
+.lvl { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+.lvl.ug { background: var(--ug); } .lvl.grad { background: var(--grad); border-radius: 50%; }
+
+.findings { display: grid; gap: 8px; }
+.finding { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.finding .stripe { background: var(--accent); }
+.finding.warn .stripe { background: var(--warn); }
+.finding .body { padding: 10px 14px; display: grid; gap: 4px; }
+.finding .top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.finding .why { color: var(--ink); font-size: 0.92rem; max-width: 80ch; }
+.empty { color: var(--muted); padding: 12px 14px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 82ch; }
+.callout p + p { margin-top: 6px; }
+.two-fig { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.two-fig .svgbox svg { min-width: 420px; }
+
+textarea { width: 100%; min-height: 520px; font: 0.86rem/1.55 var(--f-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; tab-size: 2; resize: vertical; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.status { font-size: 0.92rem; color: var(--muted); min-height: 1.5em; }
+.status.err { color: var(--crit); font-weight: 600; white-space: pre-wrap; }
+.status.ok { color: var(--ok); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px; align-items: start; }
+.schema { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; display: grid; gap: 8px; margin: 0; }
+.schema dt { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+.schema dd { margin: 0 0 6px; color: var(--muted); }
+details.drawer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; }
+details.drawer[open] { padding-bottom: 16px; }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 0; min-height: 44px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: "▸"; color: var(--accent); width: 1ch; }
+details.drawer[open] > summary::before { content: "▾"; }
+details.drawer > summary h2 { display: inline; font-size: 1.2rem; }
+details.drawer > summary .sub { color: var(--muted); font-size: 0.92rem; }
+details.drawer > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+details.drawer > .drawer-body { display: grid; gap: 14px; padding-top: 6px; }
+.behind { margin-top: 48px; padding-top: 22px; border-top: 2px solid var(--line); display: grid; gap: 14px; }
+.behind .callout p + p { margin-top: 6px; }
+footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); display: grid; gap: 6px; max-width: 80ch; }
+@media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+/* Access Review additions */
+:root { --core: #0d6670; --extra: #8f5400; --miss: #b42318; }
+@media (prefers-color-scheme: dark) { :root { --core: #5cc3cc; --extra: #f2b84b; --miss: #ff8b7b; } }
+.cell-core { fill: var(--core); }
+.cell-extra { fill: url(#hatch-extra); stroke: var(--extra); stroke-width: 1.4; }
+.cell-miss { fill: var(--surface); stroke: var(--miss); stroke-width: 1.6; stroke-dasharray: 3 2; }
+.cell-none { fill: var(--bg); }
+.coreband { fill: var(--band); }
+.colid { font: 11.5px var(--f-body); fill: var(--muted); }
+.colid.core { fill: var(--ink); font-weight: 600; }
+.rowname { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.rowsub { font: 11px var(--f-mono); fill: var(--muted); }
+.rowcount { font: 600 12px var(--f-mono); fill: var(--extra); }
+.key.core { width: 14px; height: 12px; border: 0; background: var(--core); vertical-align: -1px; }
+.key.extra { width: 14px; height: 12px; border: 1.4px solid var(--extra); vertical-align: -1px; background: repeating-linear-gradient(45deg, var(--extra) 0 1.5px, transparent 1.5px 5px); }
+.key.miss { width: 14px; height: 12px; border: 1.6px dashed var(--miss); vertical-align: -1px; background: none; }
+.finding.crit .stripe { background: var(--crit); }
+.finding.muted .stripe { background: var(--line); }
+.finding .what { font-weight: 700; }
+.finding .ev { color: var(--muted); font-size: 0.9rem; max-width: 86ch; }
+.finding .ev b { color: var(--ink); font-weight: 600; }
+.finding ul { margin: 2px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: 0.92rem; max-width: 86ch; }
+.finding .hist { font-size: 0.86rem; color: var(--muted); }
+.pill.judge { color: var(--accent); background: var(--band); }
+.chipbtn .ct { font-family: var(--f-mono); font-weight: 600; margin-left: 4px; opacity: .8; }
+.chk { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: baseline; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+.chk .mark { font-weight: 700; font-family: var(--f-mono); }
+.chk.ok .mark { color: var(--ok); } .chk.crit .mark { color: var(--crit); }
+.tiebox { display: grid; gap: 8px; }
+.bar { fill: var(--accent); } .bar.warn { fill: var(--warn); } .bar.crit { fill: var(--crit); } .bar.muted { fill: var(--muted); }
+.barlabel { font: 600 12.5px var(--f-body); fill: var(--ink); }
+.barval { font: 600 12px var(--f-mono); fill: var(--ink); }
+#mx-box svg { min-width: 0; }
+#v-bars svg { min-width: 0; max-width: 760px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Test Kitchen · Higher Ed AI Cookbook</p>
+    <h1>RCU Access Review</h1>
+    <p class="lede">Who can do what in Riverside Christian University's student information system, set against who works there and in what job. Nobody at RCU keeps a list of what each job should hold. This page proposes one from the access people actually have, then lists everything that doesn't fit, for a person to review.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-roles" aria-controls="roles" data-view="roles">Proposed roles</button>
+    <button class="tab" role="tab" id="tab-review" aria-controls="review" data-view="review">Review list</button>
+    <button class="tab" role="tab" id="tab-facts" aria-controls="facts" data-view="facts">Fact sources</button>
+  </div>
+
+  <section class="panel" role="tabpanel" id="roles" aria-labelledby="tab-roles">
+    <div class="settings" role="group" aria-labelledby="r-set-title" style="margin-top:0">
+      <div class="settings-head"><h2 id="r-set-title" style="font-size:1.15rem">What counts as a role?</h2></div>
+      <p class="settings-note">A role is proposed for each job with enough people in it: the permissions most of them hold. Raise the threshold and the role gets narrower. Then ordinary access for the job starts to look extra.</p>
+      <div class="sliders">
+        <div class="slider"><label for="s-share"><span>Share of the job who must hold a permission</span><output id="o-share" for="s-share"></output></label><input type="range" id="s-share" min="0.5" max="1" step="0.05"></div>
+        <div class="slider"><label for="s-min"><span>Fewest people in a job to propose a role</span><output id="o-min" for="s-min"></output></label><input type="range" id="s-min" min="2" max="6" step="1"></div>
+      </div>
+    </div>
+    <p class="narrative" id="r-narrative" aria-live="polite"></p>
+    <div class="stats" id="r-stats"></div>
+    <div class="figure">
+      <h3 id="mx-title">Who holds what</h3>
+      <div class="group" role="group" aria-label="Job to show" id="mx-jobs" style="margin:8px 4px 8px"></div>
+      <p class="cap" id="mx-cap"></p>
+      <div class="svgbox" id="mx-box"></div>
+      <div class="legend"><span><i class="key core"></i>In the proposed role</span><span><i class="key extra"></i>Held, but not in the role</span><span><i class="key miss"></i>In the role, but missing</span><span>Shaded columns are the role</span></div>
+    </div>
+    <div class="section-head">
+      <h2>Every proposed role</h2>
+      <p>Exact match is the confidence measure: how many people in the job hold the role's access and nothing else. A role with few exact matches is a first draft, not an answer.</p>
+    </div>
+    <div class="tablebox"><table id="r-table"></table></div>
+    <div class="section-head">
+      <h2>Jobs too small to propose a role</h2>
+      <p>One or two people can't show what a job needs. These accounts are flagged only where there is evidence: access from an earlier job, a grant, or a sensitive permission another office owns.</p>
+    </div>
+    <div class="tablebox"><table id="r-small"></table></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="review" aria-labelledby="tab-review" hidden>
+    <div class="settings" role="group" aria-labelledby="v-set-title" style="margin-top:0">
+      <div class="settings-head"><h2 id="v-set-title" style="font-size:1.15rem">What needs a look?</h2></div>
+      <div class="sliders"><div class="slider"><label for="s-dorm"><span>Flag accounts unused for</span><output id="o-dorm" for="s-dorm"></output></label><input type="range" id="s-dorm" min="30" max="365" step="15"></div></div>
+      <div class="group" role="group" aria-labelledby="flt-label"><span class="lbl" id="flt-label">Show</span><span id="flt" class="group"></span></div>
+    </div>
+    <p class="narrative" id="v-narrative" aria-live="polite"></p>
+    <div class="stats" id="v-stats"></div>
+    <div class="figure">
+      <h3>Why access doesn't fit</h3>
+      <p class="cap">Accounts by reason. One account can have several.</p>
+      <div class="svgbox" id="v-bars"></div>
+    </div>
+    <div class="findings" id="v-list"></div>
+    <div class="callout"><p><strong>The page proposes and flags. It never removes access.</strong> Some flags settle themselves once someone checks: a person who left needs their account closed. Others need someone who knows the office. Those are marked <span class="pill judge">A person decides</span>.</p></div>
+  </section>
+
+  <section class="panel" role="tabpanel" id="facts" aria-labelledby="tab-facts" hidden>
+    <p class="narrative">Each question on this page has one named source, and someone keeps it. The HR system says who works here and in what job. The SIS says what each account can do. When they disagree, the HR system is the record, and the SIS is what needs fixing. One question has no source at all: what each job should hold. That is the gap the proposed roles start to fill.</p>
+    <div class="section-head"><h2>One source per question</h2></div>
+    <div class="tablebox"><table id="f-ledger"></table></div>
+    <div class="section-head"><h2>Permissions that conflict</h2><p>Pairs no one person should hold together. The three offices that handle money agreed on these.</p></div>
+    <div class="tablebox"><table id="f-conf"></table></div>
+    <div class="section-head"><h2>What changed, and when</h2><p>Recorded by a person, so a flag has a reason next to it.</p></div>
+    <div class="tablebox"><table id="f-events"></table></div>
+    <div class="section-head"><h2>Checks</h2><p>Run every time the source file changes.</p></div>
+    <div class="tiebox" id="f-checks"></div>
+  </section>
+
+  <aside class="behind" aria-labelledby="behind-title">
+    <p class="eyebrow" id="behind-title">Behind the page</p>
+    <div class="callout">
+      <p>In the recipe, an AI assistant reads the SIS security user list and the HR export, proposes a role for each job from the access its holders share, and lists every account that doesn't fit, with the evidence: an earlier job, a grant, a separation date, a last sign-in. It never removes access. The offices adopt or correct the roles, and a person closes each item on the list.</p>
+      <p>It applies the <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/blob/main/patterns/fact-source-per-control-axis.md">fact source per control axis</a> pattern to internal control: the HR record answers who should have access, and the security user list answers who does. The drift lives between them. The <a href="../rcu-atlas/">Systems Atlas</a> shows why: staff sign in to the SIS with local passwords, so the nightly job that closes accounts never reaches it.</p>
+    </div>
+    <details class="drawer" id="source">
+      <summary><h2>Source file</h2><span class="sub">Every view on this page is drawn from it</span></summary>
+      <div class="drawer-body">
+      <p class="lede" style="margin:0">This YAML is the whole page: the HR export, the SIS security user list, grants, conflict rules and settings. Remove Marla's grade-change permission, or give the 2021 audit account an end date, then select Apply to redraw every view. Edits stay in this browser tab until you copy them out.</p>
+      <div class="controls">
+        <button class="btn" id="apply" type="button">Apply changes</button>
+        <button class="btn ghost" id="reset" type="button">Reset to original</button>
+        <button class="btn ghost" id="copy" type="button">Copy YAML</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <div class="two">
+        <div><label for="yaml-src" class="eyebrow" style="display:block;margin-bottom:6px">rcu-access-review.yaml</label><textarea id="yaml-src" spellcheck="false"></textarea></div>
+        <dl class="schema">
+          <dt>people</dt><dd>The HR export: job, office, status, hire and separation dates, and earlier jobs at RCU.</dd>
+          <dt>accounts</dt><dd>The SIS security user list. One row per active account, with its permissions and last sign-in.</dd>
+          <dt>grants</dt><dd>Access given outside a job, from the access-request log, with the reason and end date.</dd>
+          <dt>modules, permissions, conflicts</dt><dd>What the SIS can do, which office owns each module, and the pairs one person shouldn't hold.</dd>
+          <dt>settings</dt><dd>The role and flag thresholds the sliders start from.</dd>
+        </dl>
+      </div>
+      </div>
+    </details>
+  </aside>
+
+  <footer>
+    <p>Riverside Christian University is a fictional fixture institution, and its data is synthetic. Its systems match the RCU Systems Atlas.</p>
+    <p><a href="../">All demos</a> · <a href="#source">Source file</a> · <a href="https://github.com/rjoy28/higher-ed-ai-cookbook/tree/main/test-kitchen/rcu-access-review">Source on GitHub</a> · <a href="https://www.higheredaicookbook.com">The Higher Ed AI Cookbook</a> · Writing and data CC BY-NC-SA 4.0; code MIT.</p>
+  </footer>
+</div>
+<script type="text/yaml" id="source-yaml">
+# RCU Access Review: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It sets three exports side
+# by side: who works at RCU and in what job (the HR system), who can do what in the
+# student information system (the SIS security user list), and the access someone
+# granted outside a job, with the reason they wrote down. There is no role catalog.
+# Proposing one is the point of the page.
+#
+# Why the drift: staff sign in to the SIS desktop client with separate local
+# passwords (see the Systems Atlas). The nightly provisioning job disables Entra ID
+# accounts at separation. It never touches the SIS. Access is added when someone
+# asks and removed when someone remembers.
+#
+# Schema
+#   meta          institution, as_of, scope
+#   settings      min_group: fewest people in a job before the page proposes a role
+#                   from them (default 3)
+#                 core_share: share of a job's holders who must hold a permission
+#                   for it to belong to the proposed role (default 0.75)
+#                 typical_share: for jobs too small to propose a role, a permission
+#                   counts as normal for the office when at least this share of the
+#                   office's other staff hold it (default 0.5)
+#                 dormant_days: an account unused this long is flagged (default 180)
+#   modules       SIS modules and the office that owns each. null means shared.
+#   permissions   id, name, module (the id prefix), sensitive
+#   conflicts     pairs of permissions one person should not hold together, and why
+#   people        the HR export: position, office, status, hire and separation
+#                   dates, and earlier positions at RCU
+#   accounts      the SIS security user list: one row per active SIS account. hr is
+#                   the person it belongs to, or null for shared, service and
+#                   outside accounts, which name an owner instead.
+#   grants        access given outside a job, from the access-request log
+#   fact_sources  the one named source for each question, and who keeps it
+#   events        changes a person recorded, so a flag has a reason next to it
+#
+# Rules the page applies
+#   proposed role   for each position with at least min_group active holders: the
+#                   permissions held by at least core_share of them. Confidence is
+#                   how many holders match the role exactly.
+#   outside role    a permission a role holder has that the role lacks. Labeled
+#                   "from an earlier job" when it is in the role (or, failing that,
+#                   the usual access) of a position HR says the person held before,
+#                   and "granted" when a grant covers it. Otherwise unexplained.
+#   missing         a role permission the holder lacks. Usually onboarding.
+#   small jobs      positions with fewer than min_group holders get no proposed
+#                   role. The page flags only what has evidence: access from an
+#                   earlier job, grants, and sensitive permissions in a module
+#                   another office owns, unless the office's other staff (or the
+#                   other holder of the same job) also hold them.
+#   separated       HR says the person left; the account is still active. Flagged
+#                   again if it signed in after the separation date.
+#   dormant         last sign-in more than dormant_days before as_of (active staff
+#                   and non-person accounts; a separated account is flagged as
+#                   separated instead)
+#   conflict        an account holding both permissions of a conflict pair
+#   grants          a grant with no end date, or one past its end date
+#   non-person      shared accounts are flagged: nobody can be held to what they
+#                   do. Outside accounts need a grant with an end date. Service
+#                   accounts need a named owner.
+#
+# The page proposes and flags. It never removes access. Every flag goes to a
+# person, and some can only be settled by one.
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-15"
+  system: Cornerstone SIS (desktop client)
+  scope: Staff accounts in the SIS. Students and faculty reach the SIS through MyRCU and are out of scope.
+  fixture: true
+
+settings:
+  min_group: 3
+  core_share: 0.75
+  typical_share: 0.5
+  dormant_days: 180
+
+modules:
+  - {id: ADM, name: Admissions, owner: Admissions}
+  - {id: REG, name: Registration, owner: Registrar}
+  - {id: REC, name: Academic records, owner: Registrar}
+  - {id: AUD, name: Degree audit, owner: Registrar}
+  - {id: FA, name: Financial aid, owner: Financial Aid}
+  - {id: SA, name: Student accounts, owner: Business Office}
+  - {id: BIO, name: Biographic data, owner: Registrar}
+  - {id: RPT, name: Reporting, owner: null}
+  - {id: SYS, name: System administration, owner: IT Applications}
+
+permissions:
+  - {id: ADM.view, name: View applicants}
+  - {id: ADM.edit, name: Edit prospect and applicant records}
+  - {id: ADM.fee_waive, name: Waive application fees}
+  - {id: ADM.decision_enter, name: Enter admission decisions}
+  - {id: ADM.decision_release, name: Release admission decisions}
+  - {id: ADM.deposit_post, name: Post enrollment deposits}
+  - {id: REG.view, name: View schedules and registrations}
+  - {id: REG.register, name: Register and drop students}
+  - {id: REG.override, name: Override prerequisites and capacity}
+  - {id: REG.waitlist, name: Manage waitlists}
+  - {id: REG.section_build, name: Build course sections}
+  - {id: REG.section_cancel, name: Cancel course sections}
+  - {id: REC.view, name: View academic records}
+  - {id: REC.grade_change, name: Enter grade changes, sensitive: true}
+  - {id: REC.grade_approve, name: Approve grade changes, sensitive: true}
+  - {id: REC.transcript, name: Issue transcripts}
+  - {id: REC.enroll_verify, name: Issue enrollment verifications}
+  - {id: REC.degree_confer, name: Confer degrees, sensitive: true}
+  - {id: REC.ferpa_edit, name: Edit FERPA release flags, sensitive: true}
+  - {id: AUD.view, name: View degree audits}
+  - {id: AUD.exception, name: Enter degree audit exceptions}
+  - {id: AUD.rule_edit, name: Edit degree audit rules, sensitive: true}
+  - {id: BIO.view, name: "View names, addresses and contact data"}
+  - {id: BIO.edit, name: "Edit names, addresses and contact data"}
+  - {id: BIO.ssn_view, name: View Social Security numbers, sensitive: true}
+  - {id: FA.view, name: View aid records}
+  - {id: FA.isir_load, name: Load ISIR files}
+  - {id: FA.verify, name: Complete verification}
+  - {id: FA.package, name: Package aid, sensitive: true}
+  - {id: FA.award_adjust, name: Adjust awards, sensitive: true}
+  - {id: FA.disburse, name: Authorize disbursements, sensitive: true}
+  - {id: FA.sap_override, name: Override SAP status, sensitive: true}
+  - {id: SA.view, name: View student accounts}
+  - {id: SA.charge, name: Post charges}
+  - {id: SA.payment, name: Post payments}
+  - {id: SA.payment_plan, name: Set up payment plans}
+  - {id: SA.hold_place, name: Place holds}
+  - {id: SA.hold_release, name: Release holds}
+  - {id: SA.refund_issue, name: Issue refunds, sensitive: true}
+  - {id: SA.refund_bank, name: Edit refund direct-deposit details, sensitive: true}
+  - {id: SA.writeoff, name: Write off balances, sensitive: true}
+  - {id: RPT.standard, name: Run standard reports}
+  - {id: RPT.query, name: Run ad hoc queries, sensitive: true}
+  - {id: RPT.extract, name: Schedule data extracts, sensitive: true}
+  - {id: SYS.user_admin, name: Create and edit SIS users, sensitive: true}
+  - {id: SYS.security_edit, name: Edit security classes, sensitive: true}
+  - {id: SYS.job_scheduler, name: Manage the job scheduler, sensitive: true}
+  - {id: SYS.table_maint, name: Maintain code tables, sensitive: true}
+
+conflicts:
+  - {id: refund-redirect, pair: [SA.refund_bank, SA.refund_issue], why: One person could change where a refund goes and then send it.}
+  - {id: award-and-pay, pair: [FA.award_adjust, SA.refund_issue], why: One person could raise a student's aid and pay the resulting credit balance out as a refund.}
+  - {id: grade-self-approve, pair: [REC.grade_change, REC.grade_approve], why: One person could enter a grade change and approve it.}
+  - {id: admin-and-money, pair: [SYS.security_edit, SA.refund_issue], why: One person could grant themselves access and use it to move money.}
+
+people:
+  - {id: E1001, name: Sara Kiser, title: Registrar, office: Registrar, status: active, hired: "2018-06-27"}
+  - {id: E1002, name: Irene Ashby, title: Associate Registrar, office: Registrar, status: active, hired: "2018-01-16"}
+  - id: E1003
+    name: Maya Usher
+    title: Records Specialist
+    office: Registrar
+    status: active
+    hired: "2015-07-06"
+    history:
+      - {title: Admissions Counselor, from: "2015-07-06", to: "2019-05-31"}
+  - {id: E1004, name: Aaron Eller, title: Records Specialist, office: Registrar, status: active, hired: "2019-08-19"}
+  - {id: E1005, name: Vic Varner, title: Records Specialist, office: Registrar, status: active, hired: "2019-06-05"}
+  - {id: E1006, name: Reid Keel, title: Director of Financial Aid, office: Financial Aid, status: active, hired: "2012-01-08"}
+  - {id: E1007, name: Opal Dunlap, title: Associate Director of Financial Aid, office: Financial Aid, status: active, hired: "2026-08-17"}
+  - id: E1008
+    name: Jonah Dorsey
+    title: Financial Aid Counselor
+    office: Financial Aid
+    status: active
+    hired: "2017-08-01"
+    history:
+      - {title: Student Accounts Specialist, from: "2017-08-01", to: "2021-08-15"}
+  - {id: E1009, name: Gina Holloway, title: Financial Aid Counselor, office: Financial Aid, status: active, hired: "2016-06-12"}
+  - {id: E1010, name: Wendy Elam, title: Financial Aid Counselor, office: Financial Aid, status: active, hired: "2026-09-14"}
+  - {id: E1011, name: Vince Pickens, title: Financial Aid Counselor, office: Financial Aid, status: active, hired: "2023-01-07"}
+  - {id: E1012, name: Caleb Nixon, title: Bursar, office: Business Office, status: active, hired: "2012-07-25"}
+  - id: E1013
+    name: Tessa Gaddy
+    title: Student Accounts Specialist
+    office: Business Office
+    status: active
+    hired: "2019-08-05"
+    history:
+      - {title: Cashier, from: "2019-08-05", to: "2023-12-31"}
+  - {id: E1014, name: Una Oakes, title: Student Accounts Specialist, office: Business Office, status: active, hired: "2016-08-14"}
+  - {id: E1015, name: Faith Ogle, title: Student Accounts Specialist, office: Business Office, status: active, hired: "2022-01-10"}
+  - {id: E1016, name: Hazel Raney, title: Cashier, office: Business Office, status: active, hired: "2024-08-12"}
+  - {id: E1017, name: Dale Hensley, title: Cashier, office: Business Office, status: active, hired: "2012-08-21"}
+  - {id: E1018, name: Owen Deese, title: Director of Admissions, office: Admissions, status: active, hired: "2025-07-05"}
+  - id: E1019
+    name: Paul Satterfield
+    title: Assistant Director of Admissions
+    office: Admissions
+    status: active
+    hired: "2013-07-08"
+    history:
+      - {title: Admissions Counselor, from: "2013-07-08", to: "2018-06-30"}
+      - {title: Graduate Admissions Counselor, from: "2018-07-01", to: "2022-06-30"}
+  - {id: E1020, name: Hugo Odom, title: Assistant Director of Admissions, office: Admissions, status: active, hired: "2011-08-25"}
+  - id: E1021
+    name: Carmen Fontenot
+    title: Admissions Counselor
+    office: Admissions
+    status: active
+    hired: "2018-01-08"
+    history:
+      - {title: Online Program Coordinator, from: "2018-01-08", to: "2022-07-31"}
+  - id: E1022
+    name: Faith Lindsey
+    title: Admissions Counselor
+    office: Admissions
+    status: active
+    hired: "2020-06-01"
+    history:
+      - {title: Help Desk Technician, from: "2020-06-01", to: "2021-12-31"}
+  - {id: E1023, name: Nell Frazier, title: Admissions Counselor, office: Admissions, status: active, hired: "2023-07-11"}
+  - {id: E1024, name: Felix Coker, title: Admissions Counselor, office: Admissions, status: active, hired: "2009-01-20"}
+  - {id: E1025, name: Jamal Sizemore, title: Admissions Counselor, office: Admissions, status: active, hired: "2016-08-24"}
+  - {id: E1026, name: Frank Ziegler, title: Admissions Counselor, office: Admissions, status: active, hired: "2017-08-05"}
+  - {id: E1027, name: Hope Castillo, title: Admissions Counselor, office: Admissions, status: active, hired: "2026-10-05"}
+  - {id: E1028, name: Flora Cagle, title: Admissions Counselor, office: Admissions, status: active, hired: "2025-07-11"}
+  - {id: E1029, name: Bea Burks, title: Admissions Counselor, office: Admissions, status: active, hired: "2017-08-05"}
+  - {id: E1030, name: Otto Overby, title: Admissions Counselor, office: Admissions, status: active, hired: "2024-01-06"}
+  - {id: E1031, name: Knox Jinks, title: Graduate Admissions Counselor, office: Admissions, status: active, hired: "2010-06-20"}
+  - {id: E1032, name: Mona Garner, title: Graduate Admissions Counselor, office: Admissions, status: active, hired: "2017-07-26"}
+  - {id: E1033, name: Jada Pardue, title: Graduate Admissions Counselor, office: Admissions, status: active, hired: "2010-06-13"}
+  - {id: E1034, name: Hope Weems, title: Admissions Operations Coordinator, office: Admissions, status: active, hired: "2011-08-07"}
+  - {id: E1035, name: Sara Goforth, title: Provost, office: Academic Affairs, status: active, hired: "2023-08-13"}
+  - {id: E1036, name: Derek Ledbetter, title: Dean, office: Academic Affairs, status: active, hired: "2022-07-07"}
+  - {id: E1037, name: Ruth Wofford, title: Dean, office: Academic Affairs, status: active, hired: "2009-08-21"}
+  - {id: E1038, name: Moses Hargrove, title: Dean, office: Academic Affairs, status: active, hired: "2024-08-03"}
+  - {id: E1039, name: Tara Crisp, title: Dean, office: Academic Affairs, status: active, hired: "2016-01-02"}
+  - id: E1040
+    name: Wade Vance
+    title: Dean's Assistant
+    office: Academic Affairs
+    status: active
+    hired: "2011-07-05"
+    history:
+      - {title: Records Specialist, from: "2011-07-05", to: "2018-05-31"}
+  - {id: E1041, name: June Jessup, title: Dean's Assistant, office: Academic Affairs, status: active, hired: "2013-08-06"}
+  - {id: E1042, name: Zoe Bledsoe, title: Dean's Assistant, office: Academic Affairs, status: active, hired: "2025-06-27"}
+  - {id: E1043, name: Ruth Mabry, title: Dean's Assistant, office: Academic Affairs, status: active, hired: "2011-01-19"}
+  - id: E1044
+    name: Hazel Kimbrough
+    title: Director of Student Success
+    office: Student Success
+    status: active
+    hired: "2014-08-04"
+    history:
+      - {title: Financial Aid Counselor, from: "2014-08-04", to: "2019-06-30"}
+  - id: E1045
+    name: Marla Jeffcoat
+    title: Academic Advisor
+    office: Student Success
+    status: active
+    hired: "2008-07-14"
+    history:
+      - {title: Admissions Counselor, from: "2008-07-14", to: "2012-05-31"}
+      - {title: Records Specialist, from: "2012-06-01", to: "2016-07-31"}
+      - {title: Financial Aid Counselor, from: "2016-08-01", to: "2020-06-30"}
+    note: Everyone's first call when something in the SIS doesn't make sense.
+  - id: E1046
+    name: Lila Lusk
+    title: Academic Advisor
+    office: Student Success
+    status: active
+    hired: "2014-06-02"
+    history:
+      - {title: Records Specialist, from: "2014-06-02", to: "2022-01-09"}
+  - id: E1047
+    name: Hazel Mims
+    title: Academic Advisor
+    office: Student Success
+    status: active
+    hired: "2016-07-11"
+    history:
+      - {title: Admissions Counselor, from: "2016-07-11", to: "2020-12-31"}
+  - {id: E1048, name: Gus Funderburk, title: Academic Advisor, office: Student Success, status: active, hired: "2015-08-19"}
+  - {id: E1049, name: Wendy Whitlock, title: Academic Advisor, office: Student Success, status: active, hired: "2024-07-23"}
+  - {id: E1050, name: Della Talley, title: Academic Advisor, office: Student Success, status: active, hired: "2021-08-04"}
+  - id: E1051
+    name: Elena Ivey
+    title: Online Program Coordinator
+    office: Online Programs
+    status: active
+    hired: "2017-06-12"
+    history:
+      - {title: Admissions Counselor, from: "2017-06-12", to: "2021-06-30"}
+  - {id: E1052, name: Quinn Kirby, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2018-01-03"}
+  - {id: E1053, name: Tara Fite, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2017-07-19"}
+  - {id: E1054, name: Zoe Justus, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2012-08-20"}
+  - {id: E1055, name: Priya Hairston, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2012-06-17"}
+  - {id: E1056, name: Ruth Mayes, title: Director of Online Programs, office: Online Programs, status: active, hired: "2012-08-24"}
+  - id: E1057
+    name: Irene Bivens
+    title: Applications Analyst
+    office: IT Applications
+    status: active
+    hired: "2012-06-04"
+    history:
+      - {title: Records Specialist, from: "2012-06-04", to: "2017-08-31"}
+  - {id: E1058, name: Tessa Quarles, title: Applications Analyst, office: IT Applications, status: active, hired: "2018-01-07"}
+  - {id: E1059, name: Alana Rhodes, title: Database Administrator, office: IT Applications, status: active, hired: "2009-01-02"}
+  - {id: E1060, name: Derek Nance, title: Help Desk Technician, office: IT Service Desk, status: active, hired: "2017-06-16"}
+  - {id: E1061, name: Dana Tidwell, title: Help Desk Technician, office: IT Service Desk, status: active, hired: "2009-07-20"}
+  - {id: E1062, name: Uriel Pace, title: Help Desk Technician, office: IT Service Desk, status: active, hired: "2014-01-08"}
+  - {id: E1063, name: Hugo Isom, title: Director of Institutional Research, office: Institutional Research, status: active, hired: "2011-06-28"}
+  - id: E1064
+    name: Luis Boudreaux
+    title: Institutional Research Analyst
+    office: Institutional Research
+    status: active
+    hired: "2018-08-01"
+    history:
+      - {title: Financial Aid Counselor, from: "2018-08-01", to: "2022-04-30"}
+  - {id: E1065, name: Jada Lofton, title: Residence Life Coordinator, office: Residence Life, status: active, hired: "2014-08-23"}
+  - {id: E1066, name: Brett Shelby, title: Residence Life Coordinator, office: Residence Life, status: active, hired: "2013-06-21"}
+  - {id: E1067, name: Reid Nunley, title: Athletics Compliance Coordinator, office: Athletics, status: active, hired: "2017-06-03"}
+  - id: E1068
+    name: Pearl Inman
+    title: Assistant Registrar and School Certifying Official
+    office: Registrar
+    status: active
+    hired: "2016-07-25"
+    note: Certifies veterans' benefits. Works with Financial Aid on every VA student.
+  - id: E1069
+    name: Willa Hollister
+    title: Registrar
+    office: Registrar
+    status: separated
+    hired: "2001-07-02"
+    separated: "2021-06-30"
+    note: Retired June 2021. Kept the course catalog in Publisher until the day she left.
+  - {id: E1070, name: Yusuf Easley, title: Admissions Counselor, office: Admissions, status: separated, hired: "2021-07-12", separated: "2024-05-31"}
+  - {id: E1071, name: Gina Ingram, title: Admissions Counselor, office: Admissions, status: separated, hired: "2022-06-06", separated: "2025-08-15"}
+  - {id: E1072, name: Maya Dykes, title: Dean's Assistant, office: Academic Affairs, status: separated, hired: "2012-08-01", separated: "2023-01-13"}
+  - {id: E1073, name: Una Abernathy, title: Financial Aid Counselor, office: Financial Aid, status: separated, hired: "2019-06-03", separated: "2026-06-30"}
+  - {id: E1074, name: Kara Pruett, title: Records Specialist, office: Registrar, status: separated, hired: "2016-06-01", separated: "2025-12-19"}
+
+accounts:
+  - {user: skiser, hr: E1001, created: "2018-06-27", last_signin: "2026-11-03",
+     perms: [REG.view, REG.register, REG.override, REG.waitlist, REG.section_build, REG.section_cancel, REC.view, REC.grade_approve, REC.transcript, REC.enroll_verify, REC.degree_confer, REC.ferpa_edit, AUD.view, AUD.exception, AUD.rule_edit, BIO.view, BIO.edit, RPT.standard, RPT.query]}
+  - {user: iashby, hr: E1002, created: "2018-01-16", last_signin: "2026-10-09",
+     perms: [REG.view, REG.register, REG.override, REG.waitlist, REG.section_build, REG.section_cancel, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, REC.ferpa_edit, AUD.view, AUD.exception, AUD.rule_edit, BIO.view, BIO.edit, RPT.standard]}
+  - {user: musher, hr: E1003, created: "2015-07-06", last_signin: "2026-10-10",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: aeller, hr: E1004, created: "2019-08-19", last_signin: "2026-10-10",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: vvarner, hr: E1005, created: "2019-06-05", last_signin: "2026-11-05",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: rkeel, hr: E1006, created: "2012-01-08", last_signin: "2026-11-02",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.isir_load, FA.verify, FA.package, FA.award_adjust, FA.disburse, FA.sap_override, SA.view, RPT.standard, RPT.query]}
+  - {user: odunlap, hr: E1007, created: "2026-08-17", last_signin: "2026-11-04",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.isir_load, FA.verify, FA.package, FA.award_adjust, FA.disburse, SA.view, RPT.standard]}
+  - {user: jdorsey, hr: E1008, created: "2017-08-01", last_signin: "2026-10-02",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, RPT.standard]}
+  - {user: gholloway, hr: E1009, created: "2016-06-12", last_signin: "2026-10-12",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: welam, hr: E1010, created: "2026-09-14", last_signin: "2026-10-08",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, SA.view, RPT.standard]}
+  - {user: vpickens, hr: E1011, created: "2023-01-07", last_signin: "2026-10-02",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: cnixon, hr: E1012, created: "2012-07-25", last_signin: "2026-10-06",
+     perms: [BIO.view, FA.view, FA.package, FA.award_adjust, FA.disburse, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, SA.writeoff, RPT.standard, RPT.query]}
+  - {user: tgaddy, hr: E1013, created: "2019-08-05", last_signin: "2026-10-03",
+     perms: [BIO.view, BIO.edit, FA.view, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, SA.refund_bank, RPT.standard]}
+  - {user: uoakes, hr: E1014, created: "2016-08-14", last_signin: "2026-10-10",
+     perms: [BIO.view, FA.view, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, RPT.standard]}
+  - {user: fogle, hr: E1015, created: "2022-01-10", last_signin: "2026-10-08",
+     perms: [BIO.view, FA.view, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, RPT.standard]}
+  - {user: hraney, hr: E1016, created: "2024-08-12", last_signin: "2026-10-01",
+     perms: [BIO.view, BIO.edit, SA.view, SA.payment, SA.refund_bank]}
+  - {user: dhensley, hr: E1017, created: "2012-08-21", last_signin: "2026-10-06",
+     perms: [BIO.view, BIO.edit, SA.view, SA.payment, SA.refund_bank]}
+  - {user: odeese, hr: E1018, created: "2025-07-05", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard, RPT.query]}
+  - {user: psatterfield, hr: E1019, created: "2013-07-08", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard]}
+  - {user: hodom, hr: E1020, created: "2011-08-25", last_signin: "2026-11-03",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard]}
+  - {user: cfontenot, hr: E1021, created: "2018-01-08", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REC.view, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: flindsey, hr: E1022, created: "2020-06-01", last_signin: "2026-11-13",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: nfrazier, hr: E1023, created: "2023-07-11", last_signin: "2026-10-09",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: fcoker, hr: E1024, created: "2009-01-20", last_signin: "2026-11-02",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: jsizemore, hr: E1025, created: "2016-08-24", last_signin: "2026-10-04",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: fziegler, hr: E1026, created: "2017-08-05", last_signin: "2026-10-02",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard, SYS.table_maint]}
+  - {user: hcastillo, hr: E1027, created: "2026-10-05", last_signin: "2026-10-10",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, BIO.view, BIO.edit, RPT.standard]}
+  - {user: fcagle, hr: E1028, created: "2025-07-11", last_signin: "2026-10-07",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: bburks, hr: E1029, created: "2017-08-05", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: ooverby, hr: E1030, created: "2024-01-06", last_signin: "2026-10-08",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: kjinks, hr: E1031, created: "2010-06-20", last_signin: "2026-10-12",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, BIO.view, BIO.edit, RPT.standard]}
+  - {user: mgarner, hr: E1032, created: "2017-07-26", last_signin: "2026-10-04",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, BIO.view, BIO.edit, RPT.standard]}
+  - {user: jpardue, hr: E1033, created: "2010-06-13", last_signin: "2026-11-11",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, BIO.view, BIO.edit, RPT.standard]}
+  - {user: hweems, hr: E1034, created: "2011-08-07", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard, RPT.extract]}
+  - {user: sgoforth, hr: E1035, created: "2023-08-13", last_signin: "2026-06-18",
+     perms: [REG.view, REC.view, AUD.view, RPT.standard]}
+  - {user: dledbetter, hr: E1036, created: "2022-07-07", last_signin: "2024-09-03",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: rwofford, hr: E1037, created: "2009-08-21", last_signin: "2025-02-11",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: mhargrove, hr: E1038, created: "2024-08-03", last_signin: "2026-07-30",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: tcrisp, hr: E1039, created: "2016-01-02", last_signin: "2026-08-12",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: wvance, hr: E1040, created: "2011-07-05", last_signin: "2026-10-13",
+     perms: [REG.view, REG.register, REG.section_build, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, RPT.standard]}
+  - {user: jjessup, hr: E1041, created: "2013-08-06", last_signin: "2026-11-07",
+     perms: [REG.view, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: zbledsoe, hr: E1042, created: "2025-06-27", last_signin: "2026-11-02",
+     perms: [REG.view, REG.section_build, REG.section_cancel, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: rmabry, hr: E1043, created: "2011-01-19", last_signin: "2026-11-03",
+     perms: [REG.view, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: hkimbrough, hr: E1044, created: "2014-08-04", last_signin: "2026-10-01",
+     perms: [REG.view, REG.register, REG.override, REC.view, AUD.view, AUD.exception, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard, RPT.query]}
+  - {user: mjeffcoat, hr: E1045, created: "2008-07-14", last_signin: "2026-11-01",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: llusk, hr: E1046, created: "2014-06-02", last_signin: "2026-11-06",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: hmims, hr: E1047, created: "2016-07-11", last_signin: "2026-10-08",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: gfunderburk, hr: E1048, created: "2015-08-19", last_signin: "2026-11-06",
+     perms: [REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: wwhitlock, hr: E1049, created: "2024-07-23", last_signin: "2026-10-14",
+     perms: [REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: dtalley, hr: E1050, created: "2021-08-04", last_signin: "2026-11-05",
+     perms: [REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: eivey, hr: E1051, created: "2017-06-12", last_signin: "2026-11-11",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REC.view, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: qkirby, hr: E1052, created: "2018-01-03", last_signin: "2026-10-01",
+     perms: [ADM.view, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: tfite, hr: E1053, created: "2017-07-19", last_signin: "2026-11-04",
+     perms: [ADM.view, ADM.decision_release, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: zjustus, hr: E1054, created: "2012-08-20", last_signin: "2026-11-02",
+     perms: [ADM.view, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: phairston, hr: E1055, created: "2012-06-17", last_signin: "2026-10-10",
+     perms: [ADM.view, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: rmayes, hr: E1056, created: "2012-08-24", last_signin: "2026-10-12",
+     perms: [ADM.view, REG.view, REG.register, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard, RPT.query]}
+  - {user: ibivens, hr: E1057, created: "2012-06-04", last_signin: "2026-11-09",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, RPT.standard, RPT.query, RPT.extract, SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint]}
+  - {user: tquarles, hr: E1058, created: "2018-01-07", last_signin: "2026-11-04",
+     perms: [REG.view, REC.view, BIO.view, RPT.standard, RPT.query, RPT.extract, SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint]}
+  - {user: arhodes, hr: E1059, created: "2009-01-02", last_signin: "2026-11-12",
+     perms: [RPT.query, RPT.extract, SYS.job_scheduler, SYS.table_maint]}
+  - {user: dnance, hr: E1060, created: "2017-06-16", last_signin: "2026-11-07",
+     perms: [REG.view, BIO.view, BIO.edit]}
+  - {user: dtidwell, hr: E1061, created: "2009-07-20", last_signin: "2026-10-13",
+     perms: [REG.view, BIO.view]}
+  - {user: upace, hr: E1062, created: "2014-01-08", last_signin: "2026-10-10",
+     perms: [REG.view, BIO.view]}
+  - {user: hisom, hr: E1063, created: "2011-06-28", last_signin: "2026-10-01",
+     perms: [ADM.view, REG.view, REC.view, BIO.view, FA.view, RPT.standard, RPT.query, RPT.extract]}
+  - {user: lboudreaux, hr: E1064, created: "2018-08-01", last_signin: "2026-10-12",
+     perms: [ADM.view, REG.view, REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard, RPT.query]}
+  - {user: jlofton, hr: E1065, created: "2014-08-23", last_signin: "2025-04-22",
+     perms: [REG.view, BIO.view, SA.view]}
+  - {user: bshelby, hr: E1066, created: "2013-06-21", last_signin: "2026-10-09",
+     perms: [REG.view, BIO.view, SA.view]}
+  - {user: rnunley, hr: E1067, created: "2017-06-03", last_signin: "2026-06-02",
+     perms: [REG.view, REC.view, AUD.view, RPT.standard]}
+  - {user: pinman, hr: E1068, created: "2016-07-25", last_signin: "2026-10-02",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, FA.view, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: whollister, hr: E1069, created: "2001-07-02", last_signin: "2021-05-27",
+     perms: [REG.view, REG.register, REG.override, REG.waitlist, REG.section_build, REG.section_cancel, REC.view, REC.grade_approve, REC.transcript, REC.enroll_verify, REC.degree_confer, REC.ferpa_edit, AUD.view, AUD.exception, AUD.rule_edit, BIO.view, BIO.edit, RPT.standard, RPT.query]}
+  - {user: yeasley, hr: E1070, created: "2021-07-12", last_signin: "2024-05-30",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: gingram, hr: E1071, created: "2022-06-06", last_signin: "2025-08-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: mdykes, hr: E1072, created: "2012-08-01", last_signin: "2023-01-12",
+     perms: [REG.view, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: uabernathy, hr: E1073, created: "2019-06-03", last_signin: "2026-07-14",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: kpruett, hr: E1074, created: "2016-06-01", last_signin: "2025-12-18",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: regfront, hr: null, kind: shared, owner: Registrar, created: "2017-08-14", last_signin: "2026-11-13",
+     perms: [REG.view, REC.view, REC.enroll_verify, BIO.view],
+     note: Front counter PC. Student workers use it to print enrollment verifications.}
+  - {user: audit2021, hr: null, kind: external, owner: Business Office, created: "2021-09-20", last_signin: "2021-11-05",
+     perms: [SA.view, FA.view, BIO.view, RPT.standard, RPT.query]}
+  - {user: sisjobs, hr: null, kind: service, owner: IT Applications, created: "2015-03-02", last_signin: "2026-11-15",
+     perms: [SYS.job_scheduler, RPT.extract, RPT.query],
+     note: Runs the nightly extracts to the Data Hub. No interactive sign-in.}
+  - {user: cornerstone-support, hr: null, kind: external, owner: IT Applications, created: "2026-09-08", last_signin: "2026-10-29",
+     perms: [SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint]}
+
+grants:
+  - {user: cnixon, perms: [FA.package, FA.award_adjust, FA.disburse],
+     granted: "2026-03-02", by: Director of Financial Aid, reason: Cover the Associate Director vacancy until the position is filled., expires: null,
+     note: "The new associate director started Aug 17, 2026."}
+  - {user: audit2021, perms: [SA.view, FA.view, BIO.view, RPT.standard, RPT.query],
+     granted: "2021-09-20", by: Bursar, reason: Temporary for audit season., expires: null}
+  - {user: cornerstone-support, perms: [SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint],
+     granted: "2026-09-08", by: Applications Analyst, reason: Vendor support for the fall upgrade., expires: "2026-12-31"}
+
+fact_sources:
+  - {question: "Who works here, in which job, since when", steward: Human Resources, source: Keystone HR position and separation export}
+  - {question: Who can do what in the SIS, steward: IT Applications, source: SIS security user list}
+  - {question: When an account was last used, steward: IT Applications, source: SIS sign-in log}
+  - {question: Why someone has access outside their job, steward: IT Applications, source: Access-request tickets in the service desk}
+  - {question: Which permissions conflict, steward: "Bursar, Registrar and Director of Financial Aid", source: "Conflict rules the three offices agreed, Sept 2026"}
+  - {question: What each job should hold, steward: null, source: null, note: Nobody keeps this. The proposed roles are a first draft for the offices to adopt or correct.}
+
+events:
+  - {date: "2017-02-06", what: The account provisioning job went live. It disables Entra ID accounts at separation. SIS accounts are local and are removed by hand.}
+  - {date: "2019-03-11", what: An admissions counselor was given code-table maintenance to fix a dropdown on the inquiry screen. Nobody took it back.}
+  - {date: "2021-06-30", what: The registrar retired. Her SIS account was never closed.}
+  - {date: "2021-09-20", what: "An account was set up for the outside auditors. The request said: temporary for audit season."}
+  - {date: "2024-01-02", what: A cashier was promoted to student accounts specialist. The new access was added. The old access stayed.}
+  - {date: "2026-03-02", what: The bursar was given aid packaging to cover the vacant associate director job in Financial Aid.}
+  - {date: "2026-08-17", what: The new associate director of financial aid started.}
+  - {date: "2026-09-08", what: "The SIS vendor was given an admin account for the fall upgrade, ending Dec 31."}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" integrity="sha512-CSBhVREyzHAjAFfBlIBakjoRUKp5h7VSweP0InR/pAJyptH7peuhCsqAI/snV+TwZmXZqoUklpXp6R6wMnYf5Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const int = (n) => Math.round(Number(n)).toLocaleString("en-US");
+  const plural = (n, one, many) => int(n) + " " + (n === 1 ? one : many || one + "s");
+  const list = (a) => a.length <= 1 ? a.join("") : a.length === 2 ? a[0] + " and " + a[1] : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const day = (s) => Math.round(Date.parse(s + "T00:00:00Z") / 864e5);
+  const fdate = (s) => { if (!s) return ""; const [y, m, d] = s.split("-").map(Number); return MON[m - 1] + " " + d + ", " + y; };
+  const year = (s) => (s ? s.slice(0, 4) : "");
+  const ORIGINAL = $("source-yaml").textContent.replace(/^\n/, "");
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+  // ---- Model -----------------------------------------------------------
+  function build(text) {
+    if (typeof jsyaml === "undefined") throw new Error("The YAML parser did not load. Check your connection and reload the page.");
+    const d = jsyaml.load(text);
+    if (!d || typeof d !== "object") throw new Error("The source is empty.");
+    const st = d.settings || {}, meta = d.meta || {};
+    if (!ISO.test(String(meta.as_of || ""))) throw new Error("meta.as_of needs a date like \"2026-11-15\".");
+    const num = (v, lo, hi, dflt) => (typeof v === "number" && v >= lo && v <= hi ? v : dflt);
+    const defaults = { min: Math.round(num(st.min_group, 2, 50, 3)), share: num(st.core_share, 0.05, 1, 0.75), typ: num(st.typical_share, 0.05, 1, 0.5), dorm: Math.round(num(st.dormant_days, 1, 3650, 180)) };
+    const mods = {}; (d.modules || []).forEach((m, i) => { if (!m || !m.id) throw new Error("modules[" + i + "] needs an id."); mods[m.id] = { id: String(m.id), name: String(m.name || m.id), owner: m.owner ? String(m.owner) : null }; });
+    if (!Array.isArray(d.permissions) || !d.permissions.length) throw new Error("permissions needs at least one permission.");
+    const order = [], perm = {};
+    d.permissions.forEach((p, i) => {
+      if (!p || !p.id) throw new Error("permissions[" + i + "] needs an id.");
+      const id = String(p.id), mod = id.split(".")[0];
+      if (perm[id]) throw new Error("permissions: " + id + " appears twice.");
+      if (!mods[mod]) throw new Error("permissions: " + id + " starts with " + mod + ", which isn't a module id.");
+      perm[id] = { id, name: String(p.name || id), mod, sensitive: p.sensitive === true }; order.push(id);
+    });
+    const idx = Object.fromEntries(order.map((p, i) => [p, i]));
+    const sortP = (a) => a.slice().sort((x, y) => idx[x] - idx[y]);
+    const checkP = (where, ps) => { if (!Array.isArray(ps)) throw new Error(where + " needs a list of permissions."); ps.forEach((p) => { if (!perm[p]) throw new Error(where + ": " + p + " isn't a permission id."); }); return sortP(ps.map(String)); };
+    const conf = (d.conflicts || []).map((c, i) => { if (!c || !Array.isArray(c.pair) || c.pair.length !== 2) throw new Error("conflicts[" + i + "] needs a pair of two permissions."); return { id: String(c.id || "conflict-" + (i + 1)), pair: checkP("conflicts." + (c.id || i), c.pair), why: String(c.why || "") }; });
+    const people = {};
+    (d.people || []).forEach((p, i) => {
+      if (!p || !p.id || !p.title || !p.office) throw new Error("people[" + i + "] needs an id, a title and an office.");
+      if (people[p.id]) throw new Error("people: " + p.id + " appears twice.");
+      const status = p.status === "separated" ? "separated" : "active";
+      if (status === "separated" && !ISO.test(String(p.separated || ""))) throw new Error("people." + p.id + " is separated but has no separation date.");
+      people[p.id] = { id: String(p.id), name: String(p.name || p.id), title: String(p.title), office: String(p.office), status, hired: String(p.hired || ""), separated: p.separated ? String(p.separated) : null, note: p.note ? String(p.note) : "",
+        history: (p.history || []).map((h) => ({ title: String(h.title), from: String(h.from || ""), to: String(h.to || "") })) };
+    });
+    const accts = [], byUser = {};
+    (d.accounts || []).forEach((a, i) => {
+      if (!a || !a.user) throw new Error("accounts[" + i + "] needs a user name.");
+      if (byUser[a.user]) throw new Error("accounts: " + a.user + " appears twice.");
+      if (a.hr != null && !people[a.hr]) throw new Error("accounts." + a.user + ": hr " + a.hr + " isn't in people.");
+      if (!ISO.test(String(a.last_signin || ""))) throw new Error("accounts." + a.user + " needs a last_signin date.");
+      const x = { user: String(a.user), hr: a.hr == null ? null : String(a.hr), kind: a.hr == null ? String(a.kind || "shared") : "person", owner: a.owner ? String(a.owner) : null, created: String(a.created || ""), last: String(a.last_signin), perms: checkP("accounts." + a.user, a.perms || []), note: a.note ? String(a.note) : "" };
+      accts.push(x); byUser[x.user] = x;
+    });
+    const grants = {};
+    (d.grants || []).forEach((g, i) => {
+      if (!g || !byUser[g.user]) throw new Error("grants[" + i + "]: " + (g && g.user) + " isn't an account.");
+      (grants[g.user] = grants[g.user] || []).push({ perms: checkP("grants." + g.user, g.perms || []), granted: String(g.granted || ""), by: String(g.by || ""), reason: String(g.reason || ""), expires: g.expires ? String(g.expires) : null, note: g.note ? String(g.note) : "" });
+    });
+    const facts = (d.fact_sources || []).filter((f) => f && f.question).map((f) => ({ q: String(f.question), source: f.source ? String(f.source) : "", steward: f.steward ? String(f.steward) : "", note: f.note ? String(f.note) : "" }));
+    const events = (d.events || []).filter((e) => e && e.what).map((e) => ({ date: String(e.date || ""), what: String(e.what) }));
+    return { meta, asOf: String(meta.as_of), mods, perm, order, sortP, conf, people, accts, byUser, grants, facts, events, defaults };
+  }
+
+  // ---- Rules ------------------------------------------------------------
+  // Severity: crit, warn, muted. judge: a person who knows the office decides.
+  function score(M, S) {
+    const now = day(M.asOf), P = (a) => M.people[a.hr];
+    const active = M.accts.filter((a) => a.hr && P(a).status === "active");
+    const byTitle = {}; active.forEach((a) => (byTitle[P(a).title] = byTitle[P(a).title] || []).push(a));
+    const roles = {};
+    Object.entries(byTitle).forEach(([t, g]) => {
+      if (g.length < S.min) return;
+      const cnt = {}; g.forEach((a) => a.perms.forEach((p) => (cnt[p] = (cnt[p] || 0) + 1)));
+      const core = M.order.filter((p) => (cnt[p] || 0) / g.length >= S.share - 1e-9);
+      const cs = new Set(core);
+      const exact = g.filter((a) => a.perms.length === core.length && a.perms.every((p) => cs.has(p))).length;
+      roles[t] = { title: t, office: P(g[0]).office, n: g.length, core, cs, exact, cnt, members: g };
+    });
+    const inter = (sets) => sets.length ? sets.reduce((acc, s) => new Set([...acc].filter((x) => s.has(x)))) : new Set();
+    const usual = (t) => roles[t] ? roles[t].cs : inter((byTitle[t] || []).map((a) => new Set(a.perms)));
+    function typical(a) {
+      const p = P(a), others = active.filter((b) => b !== a && P(b).office === p.office), cnt = {};
+      others.forEach((b) => b.perms.forEach((x) => (cnt[x] = (cnt[x] || 0) + 1)));
+      const t = new Set(others.length ? Object.keys(cnt).filter((x) => cnt[x] / others.length >= S.typ - 1e-9) : []);
+      inter((byTitle[p.title] || []).filter((b) => b !== a).map((b) => new Set(b.perms))).forEach((x) => t.add(x));
+      return t;
+    }
+    const out = [];
+    M.accts.forEach((a) => {
+      const F = [], hs = new Set(a.perms), gs = M.grants[a.user] || [];
+      const granted = new Set(gs.flatMap((g) => g.perms));
+      const idle = now - day(a.last);
+      const p = a.hr ? P(a) : null;
+      const sep = p && p.status === "separated";
+      M.conf.forEach((c) => { if (c.pair.every((x) => hs.has(x))) F.push({ k: "conflict", sev: "crit", c }); });
+      if (sep) {
+        F.push({ k: "separated", sev: "crit" });
+        if (day(a.last) > day(p.separated)) F.push({ k: "after", sev: "crit" });
+      }
+      gs.forEach((g) => {
+        if (!g.expires) F.push({ k: "noend", sev: "warn", g, judge: idle <= S.dorm });
+        else if (day(g.expires) < now) F.push({ k: "expired", sev: "warn", g });
+      });
+      if (!sep && idle > S.dorm) F.push({ k: "dormant", sev: "warn", idle });
+      if (!a.hr) {
+        if (a.kind === "shared") F.push({ k: "shared", sev: "crit", judge: true });
+        else if (a.kind === "external" && !gs.length) F.push({ k: "nogrant", sev: "crit" });
+        else if (a.kind === "service" && !a.owner) F.push({ k: "noowner", sev: "warn" });
+      } else if (!sep) {
+        const prior = {};
+        p.history.forEach((h) => usual(h.title).forEach((x) => { if (!(x in prior)) prior[x] = h.title; }));
+        const role = roles[p.title];
+        const base = role ? role.cs : typical(a);
+        const ex = { carried: {}, granted: [], unexplained: [], cross: [] };
+        a.perms.forEach((x) => {
+          if (base.has(x)) return;
+          if (granted.has(x)) ex.granted.push(x);
+          else if (x in prior) (ex.carried[prior[x]] = ex.carried[prior[x]] || []).push(x);
+          else if (role) ex.unexplained.push(x);
+          else { const own = M.mods[M.perm[x].mod].owner; if (M.perm[x].sensitive && own && own !== p.office) ex.cross.push(x); }
+        });
+        Object.entries(ex.carried).forEach(([t, xs]) => F.push({ k: "carried", sev: "warn", t, xs }));
+        if (ex.granted.length) F.push({ k: "granted", sev: "muted", xs: ex.granted });
+        if (ex.unexplained.length) F.push({ k: "unexplained", sev: "warn", xs: ex.unexplained, role: !!role });
+        if (ex.cross.length) F.push({ k: "cross", sev: "warn", xs: ex.cross, judge: true });
+        if (role) { const miss = role.core.filter((x) => !hs.has(x)); if (miss.length) F.push({ k: "missing", sev: "muted", xs: miss }); }
+      }
+      const real = F.filter((f) => f.k !== "granted");
+      if (!real.length) return;
+      const rank = { crit: 3, warn: 2, muted: 1 };
+      const sev = F.reduce((s, f) => (rank[f.sev] > rank[s] ? f.sev : s), "muted");
+      out.push({ a, p, F, sev, judge: F.some((f) => f.judge), rank: rank[sev] });
+    });
+    out.sort((x, y) => y.rank - x.rank || (y.judge ? 1 : 0) - (x.judge ? 1 : 0) || nExtra(y) - nExtra(x) || x.a.user.localeCompare(y.a.user));
+    return { roles, byTitle, active, flags: out };
+  }
+  const nExtra = (r) => r.F.reduce((s, f) => s + (f.xs ? f.xs.length : 0), 0);
+
+  // ---- State ------------------------------------------------------------
+  let M, S, job = null, filter = "all";
+  const FILTERS = [
+    ["all", "All", () => true],
+    ["judge", "A person decides", (r) => r.judge],
+    ["conflict", "Conflicts", (r) => r.F.some((f) => f.k === "conflict")],
+    ["left", "Left RCU", (r) => r.F.some((f) => f.k === "separated")],
+    ["carried", "From earlier jobs", (r) => r.F.some((f) => f.k === "carried")],
+    ["dormant", "Unused", (r) => r.F.some((f) => f.k === "dormant")],
+    ["unexplained", "Unexplained", (r) => r.F.some((f) => f.k === "unexplained" || f.k === "cross")],
+    ["missing", "Onboarding", (r) => r.F.some((f) => f.k === "missing")],
+    ["nonperson", "Not a person", (r) => !r.a.hr],
+  ];
+
+  function syncControls() {
+    const set = (id, v, txt, dflt) => { $("s-" + id).value = v; const o = $("o-" + id); o.textContent = txt; o.classList.toggle("changed", v !== dflt); };
+    set("share", S.share, Math.round(S.share * 100) + "%", M.defaults.share);
+    set("min", S.min, String(S.min), M.defaults.min);
+    set("dorm", S.dorm, S.dorm + " days", M.defaults.dorm);
+  }
+
+  // ---- View: roles ------------------------------------------------------
+  function renderRoles(R) {
+    const roles = Object.values(R.roles).sort((a, b) => b.n - a.n || a.title.localeCompare(b.title));
+    const covered = roles.reduce((s, r) => s + r.n, 0), exact = roles.reduce((s, r) => s + r.exact, 0);
+    const extraCells = roles.reduce((s, r) => s + r.members.reduce((t, a) => t + a.perms.filter((x) => !r.cs.has(x)).length, 0), 0);
+    const missCells = roles.reduce((s, r) => s + r.members.reduce((t, a) => t + r.core.filter((x) => !a.perms.includes(x)).length, 0), 0);
+    $("r-narrative").innerHTML = esc(plural(roles.length, "job")) + " have at least " + S.min + " people, enough to propose a role. Together they cover " + int(covered) + " of " + int(R.active.length) + " active staff with SIS accounts. <strong>" + int(exact) + "</strong> of those " + int(covered) + " hold exactly their role's access. The rest hold " + plural(extraCells, "permission") + " their role doesn't include" + (missCells ? ", and lack " + plural(missCells, "permission") + " it does." : ".");
+    $("r-stats").innerHTML = [["Proposed roles", int(roles.length), ""], ["Staff covered", int(covered) + " / " + int(R.active.length), ""], ["Exact match", int(exact) + " / " + int(covered), exact / Math.max(covered, 1) < 0.6 ? "warn" : ""], ["Held outside the role", int(extraCells), extraCells ? "warn" : "ok"], ["Missing from the role", int(missCells), ""]]
+      .map(([k, n, c]) => '<div class="stat ' + c + '"><span class="n">' + esc(n) + '</span><span class="k">' + esc(k) + "</span></div>").join("");
+    if (!roles.length) { $("mx-jobs").innerHTML = ""; $("mx-box").innerHTML = '<p class="empty">No job has ' + S.min + " or more people. Lower the slider.</p>"; $("mx-cap").textContent = ""; }
+    else {
+      if (!job || !R.roles[job]) job = R.roles["Academic Advisor"] ? "Academic Advisor" : roles[0].title;
+      $("mx-jobs").innerHTML = roles.map((r) => '<button type="button" class="chipbtn" data-job="' + esc(r.title) + '" aria-pressed="' + (r.title === job) + '">' + esc(r.title) + '<span class="ct">' + r.exact + "/" + r.n + "</span></button>").join("");
+      matrix(R.roles[job]);
+    }
+    $("r-table").innerHTML = "<caption class='sr'>Proposed roles</caption><thead><tr><th scope='col'>Job</th><th scope='col' class='num'>People</th><th scope='col' class='num'>Exact match</th><th scope='col' class='num'>Permissions in role</th><th scope='col' class='num'>Held outside it</th><th scope='col'>The role</th></tr></thead><tbody>" +
+      roles.map((r) => { const ex = r.members.reduce((t, a) => t + a.perms.filter((x) => !r.cs.has(x)).length, 0); return '<tr><th scope="row">' + esc(r.title) + '<span class="sub">' + esc(r.office) + '</span></th><td class="num">' + r.n + '</td><td class="num">' + r.exact + '</td><td class="num">' + r.core.length + '</td><td class="num">' + ex + '</td><td><span class="sub">' + esc(r.core.map((x) => M.perm[x].name).join(" · ")) + "</span></td></tr>"; }).join("") + "</tbody>";
+    const small = Object.entries(R.byTitle).filter(([t]) => !R.roles[t]).sort((a, b) => a[0].localeCompare(b[0]));
+    const flagged = Object.fromEntries(R.flags.map((f) => [f.a.user, f]));
+    $("r-small").innerHTML = "<caption class='sr'>Jobs without a proposed role</caption><thead><tr><th scope='col'>Job</th><th scope='col' class='num'>People</th><th scope='col'>Flagged</th></tr></thead><tbody>" +
+      small.map(([t, g]) => { const fs = g.map((a) => flagged[a.user]).filter(Boolean); return '<tr><th scope="row">' + esc(t) + '<span class="sub">' + esc(M.people[g[0].hr].office) + '</span></th><td class="num">' + g.length + "</td><td>" + (fs.length ? fs.map((f) => esc(f.p.name) + " " + f.F.filter((x) => x.k !== "granted").map((x) => '<span class="pill ' + (x.sev === "crit" ? "crit" : "warn") + '">' + esc(LABEL[x.k]) + "</span>").join(" ")).join("<br>") : '<span class="sub">Nothing with evidence</span>') + "</td></tr>"; }).join("") + "</tbody>";
+  }
+
+  function matrix(r) {
+    const mem = r.members.slice().sort((a, b) => (b.perms.filter((x) => !r.cs.has(x)).length - a.perms.filter((x) => !r.cs.has(x)).length) || M.people[a.hr].name.localeCompare(M.people[b.hr].name));
+    const held = new Set(mem.flatMap((a) => a.perms));
+    const cols = r.core.concat(M.order.filter((x) => held.has(x) && !r.cs.has(x)).sort((x, y) => (r.cnt[y] || 0) - (r.cnt[x] || 0) || M.order.indexOf(x) - M.order.indexOf(y)));
+    const cw = 22, rh = 30, L = 230, T = 190, Rm = 56;
+    const W = L + cols.length * cw + Rm, H = T + mem.length * rh + 10;
+    let g = '<defs><pattern id="hatch-extra" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--surface)"/><line x1="0" y1="0" x2="0" y2="5" stroke="var(--extra)" stroke-width="2"/></pattern></defs>';
+    g += '<rect class="coreband" x="' + (L - 2) + '" y="' + (T - 182) + '" width="' + (r.core.length * cw + 4) + '" height="' + (mem.length * rh + 186) + '" rx="4"/>';
+    cols.forEach((x, i) => { const cx = L + i * cw + cw / 2; g += '<text class="colid' + (r.cs.has(x) ? " core" : "") + '" transform="translate(' + (cx + 4) + "," + (T - 8) + ') rotate(-58)">' + esc(M.perm[x].name.length > 30 ? M.perm[x].name.slice(0, 29) + "…" : M.perm[x].name) + "<title>" + esc(M.perm[x].name + " (" + x + ")") + "</title></text>"; });
+    g += '<text class="rowcount" x="' + (W - Rm + 10) + '" y="' + (T - 10) + '">extra</text>';
+    mem.forEach((a, j) => {
+      const p = M.people[a.hr], y = T + j * rh, hs = new Set(a.perms);
+      const nx = a.perms.filter((x) => !r.cs.has(x)).length;
+      g += '<text class="rowname" x="0" y="' + (y + 13) + '">' + esc(p.name) + '</text><text class="rowsub" x="0" y="' + (y + 25) + '">' + esc(a.user + (p.history.length ? " · " + plural(p.history.length, "earlier job") : "")) + "</text>";
+      cols.forEach((x, i) => {
+        const cx = L + i * cw + 2, inR = r.cs.has(x), h = hs.has(x);
+        const cls = h ? (inR ? "cell-core" : "cell-extra") : inR ? "cell-miss" : "cell-none";
+        const lab = p.name + ": " + M.perm[x].name + (h ? (inR ? ", held, in role" : ", held, not in role") : inR ? ", missing from role" : ", not held");
+        g += '<rect class="' + cls + '" x="' + cx + '" y="' + (y + 4) + '" width="' + (cw - 4) + '" height="' + (rh - 8) + '" rx="2"><title>' + esc(lab) + "</title></rect>";
+      });
+      if (nx) g += '<text class="rowcount" x="' + (W - Rm + 10) + '" y="' + (y + 19) + '">+' + nx + "</text>";
+    });
+    const ext = mem.filter((a) => a.perms.some((x) => !r.cs.has(x)));
+    const lbl = "Grid of " + r.n + " people in the job " + r.title + " against " + cols.length + " permissions. The proposed role has " + r.core.length + " permissions. " + (ext.length ? ext.map((a) => M.people[a.hr].name + " holds " + a.perms.filter((x) => !r.cs.has(x)).length + " outside it").join("; ") + "." : "Everyone holds the role exactly.");
+    $("mx-box").innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" style="max-width:' + W + 'px" role="img" aria-label="' + esc(lbl) + '">' + g + "</svg>";
+    $("mx-title").textContent = r.title + ": who holds what";
+    $("mx-cap").textContent = "Each row is a person, each column a permission someone in the job holds. The role is the " + r.core.length + " permissions at least " + Math.round(S.share * 100) + "% of them hold. " + r.exact + " of " + r.n + " match it exactly.";
+  }
+
+  // ---- View: review list -------------------------------------------------
+  const LABEL = { conflict: "Conflict", separated: "Left RCU", after: "Used after leaving", noend: "No end date", expired: "Grant expired", dormant: "Unused", shared: "Shared login", nogrant: "No grant", noowner: "No owner", carried: "From an earlier job", granted: "Granted", unexplained: "Unexplained", cross: "Another office's", missing: "Missing" };
+  const names = (xs) => esc(list(xs.map((x) => M.perm[x].name.charAt(0).toLowerCase() + M.perm[x].name.slice(1))));
+  function line(f, r) {
+    const a = r.a, p = r.p;
+    switch (f.k) {
+      case "conflict": return "<b>Holds both halves of a conflict:</b> " + names(f.c.pair) + ". " + esc(f.c.why);
+      case "separated": return "<b>Left RCU " + esc(fdate(p.separated)) + ".</b> The account is still active. Last used " + esc(fdate(a.last)) + ".";
+      case "after": return "<b>Signed in " + int(day(a.last) - day(p.separated)) + " days after leaving.</b> Someone used this login after its owner was gone.";
+      case "noend": return "<b>Granted " + esc(fdate(f.g.granted)) + (f.g.by ? " by the " + esc(f.g.by) : "") + ", with no end date:</b> “" + esc(f.g.reason) + "”" + (f.g.note ? " " + esc(f.g.note) : "");
+      case "expired": return "<b>Grant ended " + esc(fdate(f.g.expires)) + ".</b> The access is still there.";
+      case "dormant": return "<b>Unused for " + int(f.idle) + " days.</b> Last sign-in " + esc(fdate(a.last)) + ".";
+      case "shared": return "<b>No person behind this login.</b> Used " + esc(fdate(a.last)) + ". Owner: " + esc(a.owner || "nobody named") + ". Whatever it does, nobody can be held to it.";
+      case "nogrant": return "<b>Outside account with no grant on file.</b>";
+      case "noowner": return "<b>Service account with no named owner.</b>";
+      case "carried": { const h = p.history.find((x) => x.title === f.t); return "<b>From " + esc(f.t) + (h ? " (" + esc(year(h.from)) + "–" + esc(year(h.to)) + ")" : "") + ":</b> " + names(f.xs) + "."; }
+      case "granted": return "<b>Covered by the grant:</b> " + names(f.xs) + ".";
+      case "unexplained": return "<b>Nobody else in the job has it, and nothing explains it:</b> " + names(f.xs) + ".";
+      case "cross": return "<b>Sensitive access in a module another office owns:</b> " + names(f.xs) + ". Nobody else in the office holds it.";
+      case "missing": return "<b>Missing from the role:</b> " + names(f.xs) + ". Hired " + esc(fdate(p.hired)) + ", so probably still onboarding.";
+    }
+    return "";
+  }
+  function card(r) {
+    const a = r.a, p = r.p;
+    const who = p ? esc(p.name) : "<code>" + esc(a.user) + "</code>";
+    const sub = p ? esc(p.title) + " · " + esc(p.office) + " · <code>" + esc(a.user) + "</code>" : esc(a.kind === "external" ? "Outside account" : a.kind === "service" ? "Service account" : "Shared account") + " · owner " + esc(a.owner || "none");
+    const pills = [...new Set(r.F.filter((f) => f.k !== "granted").map((f) => f.k))].map((k) => { const f = r.F.find((x) => x.k === k); return '<span class="pill ' + (f.sev === "crit" ? "crit" : f.sev === "warn" ? "warn" : "muted") + '">' + esc(LABEL[k]) + "</span>"; }).join(" ") + (r.judge ? ' <span class="pill judge">A person decides</span>' : "");
+    const hist = p && p.history.length ? '<p class="hist">Earlier jobs: ' + esc(p.history.map((h) => h.title + " " + year(h.from) + "–" + year(h.to)).join(" → ")) + " → " + esc(p.title) + " (now)</p>" : "";
+    const note = (p && p.note) || a.note;
+    return '<article class="finding ' + r.sev + '"><span class="stripe"></span><div class="body"><div class="top"><span class="what">' + who + '</span><span class="sub">' + sub + "</span></div><div>" + pills + "</div><ul>" + r.F.map((f) => "<li>" + line(f, r) + "</li>").join("") + "</ul>" + hist + (note ? '<p class="ev"><em>' + esc(note) + "</em></p>" : "") + "</div></article>";
+  }
+  function renderReview(R) {
+    const F = R.flags, has = (k) => F.filter((r) => r.F.some((f) => f.k === k));
+    const crit = F.filter((r) => r.sev === "crit"), judge = F.filter((r) => r.judge);
+    const carried = has("carried"), left = has("separated"), conf = has("conflict"), dorm = has("dormant");
+    $("v-narrative").innerHTML = "<strong>" + esc(plural(F.length, "account")) + "</strong> of " + int(M.accts.length) + " need a look. " + esc(plural(crit.length, "is", "are").replace(/^(\d+) /, "$1 ")) + " urgent: " + esc(list([plural(left.length, "person who left", "people who left"), plural(conf.length, "conflict"), plural(has("shared").length, "shared login")].filter((s) => !s.startsWith("0")))) + ". The most common problem is quieter: " + esc(plural(carried.length, "person", "people")) + " still hold access from a job they no longer do. " + (judge.length ? esc(plural(judge.length, "item")) + " can't be settled from the record and need someone who knows the office." : "");
+    $("v-stats").innerHTML = [["Accounts flagged", F.length, ""], ["Urgent", crit.length, crit.length ? "crit" : "ok"], ["From earlier jobs", carried.length, carried.length ? "warn" : "ok"], ["Unused " + S.dorm + "+ days", dorm.length, dorm.length ? "warn" : "ok"], ["A person decides", judge.length, ""]]
+      .map(([k, n, c]) => '<div class="stat ' + c + '"><span class="n">' + int(n) + '</span><span class="k">' + esc(k) + "</span></div>").join("");
+    $("flt").innerHTML = FILTERS.map(([id, lab, fn]) => '<button type="button" class="chipbtn" data-f="' + id + '" aria-pressed="' + (filter === id) + '">' + esc(lab) + '<span class="ct">' + F.filter(fn).length + "</span></button>").join("");
+    const bars = [["Left RCU, still active", left.length, "crit"], ["Conflicting permissions", conf.length, "crit"], ["Shared or ungranted login", F.filter((r) => r.F.some((f) => f.k === "shared" || f.k === "nogrant")).length, "crit"], ["Access from an earlier job", carried.length, "warn"], ["Grant with no end date", has("noend").length, "warn"], ["Unused", dorm.length, "warn"], ["Unexplained or another office's", F.filter((r) => r.F.some((f) => f.k === "unexplained" || f.k === "cross")).length, "warn"], ["Missing from the role", has("missing").length, "muted"]];
+    const max = Math.max(1, ...bars.map((b) => b[1])), L = 250, W = 760, bh = 26, X = (v) => L + (v / max) * (W - L - 50);
+    $("v-bars").innerHTML = '<svg viewBox="0 0 ' + W + " " + (bars.length * bh + 8) + '" role="img" aria-label="' + esc("Accounts by reason: " + bars.map((b) => b[0] + " " + b[1]).join("; ") + ".") + '">' + bars.map((b, i) => { const y = i * bh + 4; return '<text class="barlabel" x="' + (L - 10) + '" y="' + (y + 15) + '" text-anchor="end">' + esc(b[0]) + '</text><rect class="bar ' + b[2] + '" x="' + L + '" y="' + (y + 3) + '" width="' + Math.max(0, X(b[1]) - L) + '" height="' + (bh - 9) + '" rx="2"/><text class="barval" x="' + (X(b[1]) + 6) + '" y="' + (y + 15) + '">' + b[1] + "</text>"; }).join("") + "</svg>";
+    const fn = FILTERS.find((f) => f[0] === filter)[2], shown = F.filter(fn);
+    $("v-list").innerHTML = shown.length ? shown.map(card).join("") : '<p class="empty">Nothing in this group at these settings.</p>';
+  }
+
+  // ---- View: fact sources --------------------------------------------------
+  function renderFacts(R) {
+    $("f-ledger").innerHTML = "<caption class='sr'>Fact source for each question</caption><thead><tr><th scope='col'>Question</th><th scope='col'>Source</th><th scope='col'>Kept by</th></tr></thead><tbody>" + M.facts.map((f) => '<tr><th scope="row">' + esc(f.q) + "</th><td>" + (f.source ? esc(f.source) : '<span class="pill crit">✕ None</span>') + (f.note ? '<span class="note">' + esc(f.note) + "</span>" : "") + "</td><td>" + (f.steward ? esc(f.steward) : "—") + "</td></tr>").join("") + "</tbody>";
+    $("f-conf").innerHTML = "<caption class='sr'>Conflicting permission pairs</caption><thead><tr><th scope='col'>Pair</th><th scope='col'>Why</th><th scope='col' class='num'>Accounts holding both</th></tr></thead><tbody>" + M.conf.map((c) => { const n = M.accts.filter((a) => c.pair.every((x) => a.perms.includes(x))).length; return '<tr><th scope="row">' + esc(c.pair.map((x) => M.perm[x].name).join(" + ")) + "</th><td>" + esc(c.why) + '</td><td class="num">' + (n ? '<span class="pill crit">' + n + "</span>" : '<span class="pill ok">0</span>') + "</td></tr>"; }).join("") + "</tbody>";
+    $("f-events").innerHTML = "<caption class='sr'>Recorded changes</caption><thead><tr><th scope='col'>Date</th><th scope='col'>What changed</th></tr></thead><tbody>" + M.events.slice().sort((a, b) => a.date.localeCompare(b.date)).map((e) => '<tr><th scope="row" style="min-width:120px">' + esc(fdate(e.date)) + "</th><td>" + esc(e.what) + "</td></tr>").join("") + "</tbody>";
+    const ck = [];
+    const noHR = M.accts.filter((a) => !a.hr);
+    ck.push({ ok: true, txt: "Every person account points to a record in the HR export (" + int(M.accts.length - noHR.length) + " of " + int(M.accts.length) + "). The other " + int(noHR.length) + " are shared, service or outside accounts, and each names an owner." });
+    const dup = {}; M.accts.forEach((a) => { if (a.hr) dup[a.hr] = (dup[a.hr] || 0) + 1; });
+    const two = Object.keys(dup).filter((k) => dup[k] > 1);
+    ck.push({ ok: !two.length, txt: two.length ? "These people have more than one SIS account: " + two.map((k) => M.people[k].name).join(", ") + "." : "Nobody has two SIS accounts." });
+    const unowned = noHR.filter((a) => !a.owner);
+    ck.push({ ok: !unowned.length, txt: unowned.length ? plural(unowned.length, "non-person account") + " name no owner: " + unowned.map((a) => a.user).join(", ") + "." : "Every non-person account names an owner." });
+    const unused = M.order.filter((x) => !M.accts.some((a) => a.perms.includes(x)));
+    ck.push({ ok: true, txt: plural(M.order.length, "permission") + " defined; " + (unused.length ? int(unused.length) + " held by nobody (" + unused.join(", ") + ")." : "every one is held by at least one account.") });
+    const noAcct = Object.values(M.people).filter((p) => p.status === "active" && !M.accts.some((a) => a.hr === p.id));
+    ck.push({ ok: true, txt: noAcct.length ? plural(noAcct.length, "active employee") + " in the HR export have no SIS account. That's normal: not every job needs the SIS." : "Every active employee in the HR export has an SIS account." });
+    $("f-checks").innerHTML = ck.map((k) => '<div class="chk ' + (k.ok ? "ok" : "crit") + '"><span class="mark">' + (k.ok ? "✓ Pass" : "✕ Fails") + "</span><span>" + esc(k.txt) + "</span></div>").join("");
+  }
+
+  function renderMeta(R) {
+    $("meta").innerHTML = [["System", M.meta.system], ["SIS accounts", int(M.accts.length)], ["Staff in HR", int(Object.keys(M.people).length)], ["Permissions", int(M.order.length)], ["As of", fdate(M.asOf)]]
+      .filter(([, v]) => v != null && v !== "").map(([k, v]) => "<span>" + esc(k) + " <b>" + esc(v) + "</b></span>").join("");
+  }
+  function renderAll() { syncControls(); const R = score(M, S); renderMeta(R); renderRoles(R); renderReview(R); renderFacts(R); }
+
+  // ---- Tabs, source, events ---------------------------------------------
+  const TABS = ["roles", "review", "facts"];
+  const openSource = () => { const d = $("source"); d.open = true; d.scrollIntoView({ block: "start" }); };
+  function show(view, focus) {
+    if (view === "source") { openSource(); view = TABS.find((t) => !$(t).hidden) || "roles"; }
+    if (!TABS.includes(view)) view = "roles";
+    TABS.forEach((t) => { const on = t === view; $(t).hidden = !on; const b = $("tab-" + t); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  }
+  const setHash = (v) => { try { history.replaceState(null, "", "#" + v); } catch (e) { /* not allowed here */ } };
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) { setHash(b.dataset.view); show(b.dataset.view); } });
+  document.querySelector(".tabs").addEventListener("keydown", (e) => {
+    const i = TABS.indexOf(document.activeElement.dataset.view); if (i < 0) return;
+    const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+    if (j >= 0) { e.preventDefault(); setHash(TABS[j]); show(TABS[j], true); }
+  });
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  document.addEventListener("click", (e) => { const a = e.target.closest('a[href="#source"]'); if (!a) return; e.preventDefault(); setHash("source"); openSource(); $("source").querySelector("summary").focus(); });
+
+  const refocus = (sel) => { const nb = document.querySelector(sel); if (nb) nb.focus(); };
+  $("mx-jobs").addEventListener("click", (e) => { const b = e.target.closest("[data-job]"); if (!b) return; job = b.dataset.job; renderAll(); refocus('[data-job="' + CSS.escape(job) + '"]'); });
+  $("flt").addEventListener("click", (e) => { const b = e.target.closest("[data-f]"); if (!b) return; filter = b.dataset.f; renderAll(); refocus('[data-f="' + CSS.escape(filter) + '"]'); });
+  $("s-share").addEventListener("input", (e) => { S.share = Math.round(parseFloat(e.target.value) * 100) / 100; renderAll(); });
+  $("s-min").addEventListener("input", (e) => { S.min = parseInt(e.target.value, 10); renderAll(); });
+  $("s-dorm").addEventListener("input", (e) => { S.dorm = parseInt(e.target.value, 10); renderAll(); });
+
+  const statusMsg = (msg, cls) => { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); };
+  const load = (text) => { const next = build(text); M = next; S = Object.assign({}, M.defaults); renderAll(); };
+  $("apply").addEventListener("click", () => { try { load($("yaml-src").value); statusMsg("Applied. " + plural(M.accts.length, "account") + ", " + plural(Object.keys(M.people).length, "HR record") + ", " + plural(M.order.length, "permission") + ". Settings reset to the file's values.", "ok"); } catch (err) { statusMsg("Not applied. " + err.message, "err"); } });
+  $("reset").addEventListener("click", () => { $("yaml-src").value = ORIGINAL; load(ORIGINAL); statusMsg("Reset to the original source.", "ok"); });
+  $("copy").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("yaml-src").value); statusMsg("Copied to the clipboard.", "ok"); } catch (e) { $("yaml-src").select(); statusMsg("Select all and copy with your keyboard; this browser blocked clipboard access.", ""); } });
+
+  $("yaml-src").value = ORIGINAL;
+  try { load(ORIGINAL); } catch (err) { $("r-narrative").textContent = err.message; }
+  show(location.hash.slice(1) || "roles");
+})();
+</script>
+</body>
+</html>

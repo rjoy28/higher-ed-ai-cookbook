@@ -1,0 +1,522 @@
+# RCU Access Review: source file
+# Riverside Christian University is a fictional fixture institution. Synthetic data.
+#
+# This file is the single source of truth for the page. It sets three exports side
+# by side: who works at RCU and in what job (the HR system), who can do what in the
+# student information system (the SIS security user list), and the access someone
+# granted outside a job, with the reason they wrote down. There is no role catalog.
+# Proposing one is the point of the page.
+#
+# Why the drift: staff sign in to the SIS desktop client with separate local
+# passwords (see the Systems Atlas). The nightly provisioning job disables Entra ID
+# accounts at separation. It never touches the SIS. Access is added when someone
+# asks and removed when someone remembers.
+#
+# Schema
+#   meta          institution, as_of, scope
+#   settings      min_group: fewest people in a job before the page proposes a role
+#                   from them (default 3)
+#                 core_share: share of a job's holders who must hold a permission
+#                   for it to belong to the proposed role (default 0.75)
+#                 typical_share: for jobs too small to propose a role, a permission
+#                   counts as normal for the office when at least this share of the
+#                   office's other staff hold it (default 0.5)
+#                 dormant_days: an account unused this long is flagged (default 180)
+#   modules       SIS modules and the office that owns each. null means shared.
+#   permissions   id, name, module (the id prefix), sensitive
+#   conflicts     pairs of permissions one person should not hold together, and why
+#   people        the HR export: position, office, status, hire and separation
+#                   dates, and earlier positions at RCU
+#   accounts      the SIS security user list: one row per active SIS account. hr is
+#                   the person it belongs to, or null for shared, service and
+#                   outside accounts, which name an owner instead.
+#   grants        access given outside a job, from the access-request log
+#   fact_sources  the one named source for each question, and who keeps it
+#   events        changes a person recorded, so a flag has a reason next to it
+#
+# Rules the page applies
+#   proposed role   for each position with at least min_group active holders: the
+#                   permissions held by at least core_share of them. Confidence is
+#                   how many holders match the role exactly.
+#   outside role    a permission a role holder has that the role lacks. Labeled
+#                   "from an earlier job" when it is in the role (or, failing that,
+#                   the usual access) of a position HR says the person held before,
+#                   and "granted" when a grant covers it. Otherwise unexplained.
+#   missing         a role permission the holder lacks. Usually onboarding.
+#   small jobs      positions with fewer than min_group holders get no proposed
+#                   role. The page flags only what has evidence: access from an
+#                   earlier job, grants, and sensitive permissions in a module
+#                   another office owns, unless the office's other staff (or the
+#                   other holder of the same job) also hold them.
+#   separated       HR says the person left; the account is still active. Flagged
+#                   again if it signed in after the separation date.
+#   dormant         last sign-in more than dormant_days before as_of (active staff
+#                   and non-person accounts; a separated account is flagged as
+#                   separated instead)
+#   conflict        an account holding both permissions of a conflict pair
+#   grants          a grant with no end date, or one past its end date
+#   non-person      shared accounts are flagged: nobody can be held to what they
+#                   do. Outside accounts need a grant with an end date. Service
+#                   accounts need a named owner.
+#
+# The page proposes and flags. It never removes access. Every flag goes to a
+# person, and some can only be settled by one.
+
+meta:
+  institution: Riverside Christian University
+  short_name: RCU
+  as_of: "2026-11-15"
+  system: Cornerstone SIS (desktop client)
+  scope: Staff accounts in the SIS. Students and faculty reach the SIS through MyRCU and are out of scope.
+  fixture: true
+
+settings:
+  min_group: 3
+  core_share: 0.75
+  typical_share: 0.5
+  dormant_days: 180
+
+modules:
+  - {id: ADM, name: Admissions, owner: Admissions}
+  - {id: REG, name: Registration, owner: Registrar}
+  - {id: REC, name: Academic records, owner: Registrar}
+  - {id: AUD, name: Degree audit, owner: Registrar}
+  - {id: FA, name: Financial aid, owner: Financial Aid}
+  - {id: SA, name: Student accounts, owner: Business Office}
+  - {id: BIO, name: Biographic data, owner: Registrar}
+  - {id: RPT, name: Reporting, owner: null}
+  - {id: SYS, name: System administration, owner: IT Applications}
+
+permissions:
+  - {id: ADM.view, name: View applicants}
+  - {id: ADM.edit, name: Edit prospect and applicant records}
+  - {id: ADM.fee_waive, name: Waive application fees}
+  - {id: ADM.decision_enter, name: Enter admission decisions}
+  - {id: ADM.decision_release, name: Release admission decisions}
+  - {id: ADM.deposit_post, name: Post enrollment deposits}
+  - {id: REG.view, name: View schedules and registrations}
+  - {id: REG.register, name: Register and drop students}
+  - {id: REG.override, name: Override prerequisites and capacity}
+  - {id: REG.waitlist, name: Manage waitlists}
+  - {id: REG.section_build, name: Build course sections}
+  - {id: REG.section_cancel, name: Cancel course sections}
+  - {id: REC.view, name: View academic records}
+  - {id: REC.grade_change, name: Enter grade changes, sensitive: true}
+  - {id: REC.grade_approve, name: Approve grade changes, sensitive: true}
+  - {id: REC.transcript, name: Issue transcripts}
+  - {id: REC.enroll_verify, name: Issue enrollment verifications}
+  - {id: REC.degree_confer, name: Confer degrees, sensitive: true}
+  - {id: REC.ferpa_edit, name: Edit FERPA release flags, sensitive: true}
+  - {id: AUD.view, name: View degree audits}
+  - {id: AUD.exception, name: Enter degree audit exceptions}
+  - {id: AUD.rule_edit, name: Edit degree audit rules, sensitive: true}
+  - {id: BIO.view, name: "View names, addresses and contact data"}
+  - {id: BIO.edit, name: "Edit names, addresses and contact data"}
+  - {id: BIO.ssn_view, name: View Social Security numbers, sensitive: true}
+  - {id: FA.view, name: View aid records}
+  - {id: FA.isir_load, name: Load ISIR files}
+  - {id: FA.verify, name: Complete verification}
+  - {id: FA.package, name: Package aid, sensitive: true}
+  - {id: FA.award_adjust, name: Adjust awards, sensitive: true}
+  - {id: FA.disburse, name: Authorize disbursements, sensitive: true}
+  - {id: FA.sap_override, name: Override SAP status, sensitive: true}
+  - {id: SA.view, name: View student accounts}
+  - {id: SA.charge, name: Post charges}
+  - {id: SA.payment, name: Post payments}
+  - {id: SA.payment_plan, name: Set up payment plans}
+  - {id: SA.hold_place, name: Place holds}
+  - {id: SA.hold_release, name: Release holds}
+  - {id: SA.refund_issue, name: Issue refunds, sensitive: true}
+  - {id: SA.refund_bank, name: Edit refund direct-deposit details, sensitive: true}
+  - {id: SA.writeoff, name: Write off balances, sensitive: true}
+  - {id: RPT.standard, name: Run standard reports}
+  - {id: RPT.query, name: Run ad hoc queries, sensitive: true}
+  - {id: RPT.extract, name: Schedule data extracts, sensitive: true}
+  - {id: SYS.user_admin, name: Create and edit SIS users, sensitive: true}
+  - {id: SYS.security_edit, name: Edit security classes, sensitive: true}
+  - {id: SYS.job_scheduler, name: Manage the job scheduler, sensitive: true}
+  - {id: SYS.table_maint, name: Maintain code tables, sensitive: true}
+
+conflicts:
+  - {id: refund-redirect, pair: [SA.refund_bank, SA.refund_issue], why: One person could change where a refund goes and then send it.}
+  - {id: award-and-pay, pair: [FA.award_adjust, SA.refund_issue], why: One person could raise a student's aid and pay the resulting credit balance out as a refund.}
+  - {id: grade-self-approve, pair: [REC.grade_change, REC.grade_approve], why: One person could enter a grade change and approve it.}
+  - {id: admin-and-money, pair: [SYS.security_edit, SA.refund_issue], why: One person could grant themselves access and use it to move money.}
+
+people:
+  - {id: E1001, name: Sara Kiser, title: Registrar, office: Registrar, status: active, hired: "2018-06-27"}
+  - {id: E1002, name: Irene Ashby, title: Associate Registrar, office: Registrar, status: active, hired: "2018-01-16"}
+  - id: E1003
+    name: Maya Usher
+    title: Records Specialist
+    office: Registrar
+    status: active
+    hired: "2015-07-06"
+    history:
+      - {title: Admissions Counselor, from: "2015-07-06", to: "2019-05-31"}
+  - {id: E1004, name: Aaron Eller, title: Records Specialist, office: Registrar, status: active, hired: "2019-08-19"}
+  - {id: E1005, name: Vic Varner, title: Records Specialist, office: Registrar, status: active, hired: "2019-06-05"}
+  - {id: E1006, name: Reid Keel, title: Director of Financial Aid, office: Financial Aid, status: active, hired: "2012-01-08"}
+  - {id: E1007, name: Opal Dunlap, title: Associate Director of Financial Aid, office: Financial Aid, status: active, hired: "2026-08-17"}
+  - id: E1008
+    name: Jonah Dorsey
+    title: Financial Aid Counselor
+    office: Financial Aid
+    status: active
+    hired: "2017-08-01"
+    history:
+      - {title: Student Accounts Specialist, from: "2017-08-01", to: "2021-08-15"}
+  - {id: E1009, name: Gina Holloway, title: Financial Aid Counselor, office: Financial Aid, status: active, hired: "2016-06-12"}
+  - {id: E1010, name: Wendy Elam, title: Financial Aid Counselor, office: Financial Aid, status: active, hired: "2026-09-14"}
+  - {id: E1011, name: Vince Pickens, title: Financial Aid Counselor, office: Financial Aid, status: active, hired: "2023-01-07"}
+  - {id: E1012, name: Caleb Nixon, title: Bursar, office: Business Office, status: active, hired: "2012-07-25"}
+  - id: E1013
+    name: Tessa Gaddy
+    title: Student Accounts Specialist
+    office: Business Office
+    status: active
+    hired: "2019-08-05"
+    history:
+      - {title: Cashier, from: "2019-08-05", to: "2023-12-31"}
+  - {id: E1014, name: Una Oakes, title: Student Accounts Specialist, office: Business Office, status: active, hired: "2016-08-14"}
+  - {id: E1015, name: Faith Ogle, title: Student Accounts Specialist, office: Business Office, status: active, hired: "2022-01-10"}
+  - {id: E1016, name: Hazel Raney, title: Cashier, office: Business Office, status: active, hired: "2024-08-12"}
+  - {id: E1017, name: Dale Hensley, title: Cashier, office: Business Office, status: active, hired: "2012-08-21"}
+  - {id: E1018, name: Owen Deese, title: Director of Admissions, office: Admissions, status: active, hired: "2025-07-05"}
+  - id: E1019
+    name: Paul Satterfield
+    title: Assistant Director of Admissions
+    office: Admissions
+    status: active
+    hired: "2013-07-08"
+    history:
+      - {title: Admissions Counselor, from: "2013-07-08", to: "2018-06-30"}
+      - {title: Graduate Admissions Counselor, from: "2018-07-01", to: "2022-06-30"}
+  - {id: E1020, name: Hugo Odom, title: Assistant Director of Admissions, office: Admissions, status: active, hired: "2011-08-25"}
+  - id: E1021
+    name: Carmen Fontenot
+    title: Admissions Counselor
+    office: Admissions
+    status: active
+    hired: "2018-01-08"
+    history:
+      - {title: Online Program Coordinator, from: "2018-01-08", to: "2022-07-31"}
+  - id: E1022
+    name: Faith Lindsey
+    title: Admissions Counselor
+    office: Admissions
+    status: active
+    hired: "2020-06-01"
+    history:
+      - {title: Help Desk Technician, from: "2020-06-01", to: "2021-12-31"}
+  - {id: E1023, name: Nell Frazier, title: Admissions Counselor, office: Admissions, status: active, hired: "2023-07-11"}
+  - {id: E1024, name: Felix Coker, title: Admissions Counselor, office: Admissions, status: active, hired: "2009-01-20"}
+  - {id: E1025, name: Jamal Sizemore, title: Admissions Counselor, office: Admissions, status: active, hired: "2016-08-24"}
+  - {id: E1026, name: Frank Ziegler, title: Admissions Counselor, office: Admissions, status: active, hired: "2017-08-05"}
+  - {id: E1027, name: Hope Castillo, title: Admissions Counselor, office: Admissions, status: active, hired: "2026-10-05"}
+  - {id: E1028, name: Flora Cagle, title: Admissions Counselor, office: Admissions, status: active, hired: "2025-07-11"}
+  - {id: E1029, name: Bea Burks, title: Admissions Counselor, office: Admissions, status: active, hired: "2017-08-05"}
+  - {id: E1030, name: Otto Overby, title: Admissions Counselor, office: Admissions, status: active, hired: "2024-01-06"}
+  - {id: E1031, name: Knox Jinks, title: Graduate Admissions Counselor, office: Admissions, status: active, hired: "2010-06-20"}
+  - {id: E1032, name: Mona Garner, title: Graduate Admissions Counselor, office: Admissions, status: active, hired: "2017-07-26"}
+  - {id: E1033, name: Jada Pardue, title: Graduate Admissions Counselor, office: Admissions, status: active, hired: "2010-06-13"}
+  - {id: E1034, name: Hope Weems, title: Admissions Operations Coordinator, office: Admissions, status: active, hired: "2011-08-07"}
+  - {id: E1035, name: Sara Goforth, title: Provost, office: Academic Affairs, status: active, hired: "2023-08-13"}
+  - {id: E1036, name: Derek Ledbetter, title: Dean, office: Academic Affairs, status: active, hired: "2022-07-07"}
+  - {id: E1037, name: Ruth Wofford, title: Dean, office: Academic Affairs, status: active, hired: "2009-08-21"}
+  - {id: E1038, name: Moses Hargrove, title: Dean, office: Academic Affairs, status: active, hired: "2024-08-03"}
+  - {id: E1039, name: Tara Crisp, title: Dean, office: Academic Affairs, status: active, hired: "2016-01-02"}
+  - id: E1040
+    name: Wade Vance
+    title: Dean's Assistant
+    office: Academic Affairs
+    status: active
+    hired: "2011-07-05"
+    history:
+      - {title: Records Specialist, from: "2011-07-05", to: "2018-05-31"}
+  - {id: E1041, name: June Jessup, title: Dean's Assistant, office: Academic Affairs, status: active, hired: "2013-08-06"}
+  - {id: E1042, name: Zoe Bledsoe, title: Dean's Assistant, office: Academic Affairs, status: active, hired: "2025-06-27"}
+  - {id: E1043, name: Ruth Mabry, title: Dean's Assistant, office: Academic Affairs, status: active, hired: "2011-01-19"}
+  - id: E1044
+    name: Hazel Kimbrough
+    title: Director of Student Success
+    office: Student Success
+    status: active
+    hired: "2014-08-04"
+    history:
+      - {title: Financial Aid Counselor, from: "2014-08-04", to: "2019-06-30"}
+  - id: E1045
+    name: Marla Jeffcoat
+    title: Academic Advisor
+    office: Student Success
+    status: active
+    hired: "2008-07-14"
+    history:
+      - {title: Admissions Counselor, from: "2008-07-14", to: "2012-05-31"}
+      - {title: Records Specialist, from: "2012-06-01", to: "2016-07-31"}
+      - {title: Financial Aid Counselor, from: "2016-08-01", to: "2020-06-30"}
+    note: Everyone's first call when something in the SIS doesn't make sense.
+  - id: E1046
+    name: Lila Lusk
+    title: Academic Advisor
+    office: Student Success
+    status: active
+    hired: "2014-06-02"
+    history:
+      - {title: Records Specialist, from: "2014-06-02", to: "2022-01-09"}
+  - id: E1047
+    name: Hazel Mims
+    title: Academic Advisor
+    office: Student Success
+    status: active
+    hired: "2016-07-11"
+    history:
+      - {title: Admissions Counselor, from: "2016-07-11", to: "2020-12-31"}
+  - {id: E1048, name: Gus Funderburk, title: Academic Advisor, office: Student Success, status: active, hired: "2015-08-19"}
+  - {id: E1049, name: Wendy Whitlock, title: Academic Advisor, office: Student Success, status: active, hired: "2024-07-23"}
+  - {id: E1050, name: Della Talley, title: Academic Advisor, office: Student Success, status: active, hired: "2021-08-04"}
+  - id: E1051
+    name: Elena Ivey
+    title: Online Program Coordinator
+    office: Online Programs
+    status: active
+    hired: "2017-06-12"
+    history:
+      - {title: Admissions Counselor, from: "2017-06-12", to: "2021-06-30"}
+  - {id: E1052, name: Quinn Kirby, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2018-01-03"}
+  - {id: E1053, name: Tara Fite, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2017-07-19"}
+  - {id: E1054, name: Zoe Justus, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2012-08-20"}
+  - {id: E1055, name: Priya Hairston, title: Online Program Coordinator, office: Online Programs, status: active, hired: "2012-06-17"}
+  - {id: E1056, name: Ruth Mayes, title: Director of Online Programs, office: Online Programs, status: active, hired: "2012-08-24"}
+  - id: E1057
+    name: Irene Bivens
+    title: Applications Analyst
+    office: IT Applications
+    status: active
+    hired: "2012-06-04"
+    history:
+      - {title: Records Specialist, from: "2012-06-04", to: "2017-08-31"}
+  - {id: E1058, name: Tessa Quarles, title: Applications Analyst, office: IT Applications, status: active, hired: "2018-01-07"}
+  - {id: E1059, name: Alana Rhodes, title: Database Administrator, office: IT Applications, status: active, hired: "2009-01-02"}
+  - {id: E1060, name: Derek Nance, title: Help Desk Technician, office: IT Service Desk, status: active, hired: "2017-06-16"}
+  - {id: E1061, name: Dana Tidwell, title: Help Desk Technician, office: IT Service Desk, status: active, hired: "2009-07-20"}
+  - {id: E1062, name: Uriel Pace, title: Help Desk Technician, office: IT Service Desk, status: active, hired: "2014-01-08"}
+  - {id: E1063, name: Hugo Isom, title: Director of Institutional Research, office: Institutional Research, status: active, hired: "2011-06-28"}
+  - id: E1064
+    name: Luis Boudreaux
+    title: Institutional Research Analyst
+    office: Institutional Research
+    status: active
+    hired: "2018-08-01"
+    history:
+      - {title: Financial Aid Counselor, from: "2018-08-01", to: "2022-04-30"}
+  - {id: E1065, name: Jada Lofton, title: Residence Life Coordinator, office: Residence Life, status: active, hired: "2014-08-23"}
+  - {id: E1066, name: Brett Shelby, title: Residence Life Coordinator, office: Residence Life, status: active, hired: "2013-06-21"}
+  - {id: E1067, name: Reid Nunley, title: Athletics Compliance Coordinator, office: Athletics, status: active, hired: "2017-06-03"}
+  - id: E1068
+    name: Pearl Inman
+    title: Assistant Registrar and School Certifying Official
+    office: Registrar
+    status: active
+    hired: "2016-07-25"
+    note: Certifies veterans' benefits. Works with Financial Aid on every VA student.
+  - id: E1069
+    name: Willa Hollister
+    title: Registrar
+    office: Registrar
+    status: separated
+    hired: "2001-07-02"
+    separated: "2021-06-30"
+    note: Retired June 2021. Kept the course catalog in Publisher until the day she left.
+  - {id: E1070, name: Yusuf Easley, title: Admissions Counselor, office: Admissions, status: separated, hired: "2021-07-12", separated: "2024-05-31"}
+  - {id: E1071, name: Gina Ingram, title: Admissions Counselor, office: Admissions, status: separated, hired: "2022-06-06", separated: "2025-08-15"}
+  - {id: E1072, name: Maya Dykes, title: Dean's Assistant, office: Academic Affairs, status: separated, hired: "2012-08-01", separated: "2023-01-13"}
+  - {id: E1073, name: Una Abernathy, title: Financial Aid Counselor, office: Financial Aid, status: separated, hired: "2019-06-03", separated: "2026-06-30"}
+  - {id: E1074, name: Kara Pruett, title: Records Specialist, office: Registrar, status: separated, hired: "2016-06-01", separated: "2025-12-19"}
+
+accounts:
+  - {user: skiser, hr: E1001, created: "2018-06-27", last_signin: "2026-11-03",
+     perms: [REG.view, REG.register, REG.override, REG.waitlist, REG.section_build, REG.section_cancel, REC.view, REC.grade_approve, REC.transcript, REC.enroll_verify, REC.degree_confer, REC.ferpa_edit, AUD.view, AUD.exception, AUD.rule_edit, BIO.view, BIO.edit, RPT.standard, RPT.query]}
+  - {user: iashby, hr: E1002, created: "2018-01-16", last_signin: "2026-10-09",
+     perms: [REG.view, REG.register, REG.override, REG.waitlist, REG.section_build, REG.section_cancel, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, REC.ferpa_edit, AUD.view, AUD.exception, AUD.rule_edit, BIO.view, BIO.edit, RPT.standard]}
+  - {user: musher, hr: E1003, created: "2015-07-06", last_signin: "2026-10-10",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: aeller, hr: E1004, created: "2019-08-19", last_signin: "2026-10-10",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: vvarner, hr: E1005, created: "2019-06-05", last_signin: "2026-11-05",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: rkeel, hr: E1006, created: "2012-01-08", last_signin: "2026-11-02",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.isir_load, FA.verify, FA.package, FA.award_adjust, FA.disburse, FA.sap_override, SA.view, RPT.standard, RPT.query]}
+  - {user: odunlap, hr: E1007, created: "2026-08-17", last_signin: "2026-11-04",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.isir_load, FA.verify, FA.package, FA.award_adjust, FA.disburse, SA.view, RPT.standard]}
+  - {user: jdorsey, hr: E1008, created: "2017-08-01", last_signin: "2026-10-02",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, RPT.standard]}
+  - {user: gholloway, hr: E1009, created: "2016-06-12", last_signin: "2026-10-12",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: welam, hr: E1010, created: "2026-09-14", last_signin: "2026-10-08",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, SA.view, RPT.standard]}
+  - {user: vpickens, hr: E1011, created: "2023-01-07", last_signin: "2026-10-02",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: cnixon, hr: E1012, created: "2012-07-25", last_signin: "2026-10-06",
+     perms: [BIO.view, FA.view, FA.package, FA.award_adjust, FA.disburse, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, SA.writeoff, RPT.standard, RPT.query]}
+  - {user: tgaddy, hr: E1013, created: "2019-08-05", last_signin: "2026-10-03",
+     perms: [BIO.view, BIO.edit, FA.view, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, SA.refund_bank, RPT.standard]}
+  - {user: uoakes, hr: E1014, created: "2016-08-14", last_signin: "2026-10-10",
+     perms: [BIO.view, FA.view, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, RPT.standard]}
+  - {user: fogle, hr: E1015, created: "2022-01-10", last_signin: "2026-10-08",
+     perms: [BIO.view, FA.view, SA.view, SA.charge, SA.payment, SA.payment_plan, SA.hold_place, SA.hold_release, SA.refund_issue, RPT.standard]}
+  - {user: hraney, hr: E1016, created: "2024-08-12", last_signin: "2026-10-01",
+     perms: [BIO.view, BIO.edit, SA.view, SA.payment, SA.refund_bank]}
+  - {user: dhensley, hr: E1017, created: "2012-08-21", last_signin: "2026-10-06",
+     perms: [BIO.view, BIO.edit, SA.view, SA.payment, SA.refund_bank]}
+  - {user: odeese, hr: E1018, created: "2025-07-05", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard, RPT.query]}
+  - {user: psatterfield, hr: E1019, created: "2013-07-08", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard]}
+  - {user: hodom, hr: E1020, created: "2011-08-25", last_signin: "2026-11-03",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard]}
+  - {user: cfontenot, hr: E1021, created: "2018-01-08", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REC.view, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: flindsey, hr: E1022, created: "2020-06-01", last_signin: "2026-11-13",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: nfrazier, hr: E1023, created: "2023-07-11", last_signin: "2026-10-09",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: fcoker, hr: E1024, created: "2009-01-20", last_signin: "2026-11-02",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: jsizemore, hr: E1025, created: "2016-08-24", last_signin: "2026-10-04",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: fziegler, hr: E1026, created: "2017-08-05", last_signin: "2026-10-02",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard, SYS.table_maint]}
+  - {user: hcastillo, hr: E1027, created: "2026-10-05", last_signin: "2026-10-10",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, BIO.view, BIO.edit, RPT.standard]}
+  - {user: fcagle, hr: E1028, created: "2025-07-11", last_signin: "2026-10-07",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: bburks, hr: E1029, created: "2017-08-05", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: ooverby, hr: E1030, created: "2024-01-06", last_signin: "2026-10-08",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: kjinks, hr: E1031, created: "2010-06-20", last_signin: "2026-10-12",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, BIO.view, BIO.edit, RPT.standard]}
+  - {user: mgarner, hr: E1032, created: "2017-07-26", last_signin: "2026-10-04",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, BIO.view, BIO.edit, RPT.standard]}
+  - {user: jpardue, hr: E1033, created: "2010-06-13", last_signin: "2026-11-11",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, ADM.decision_release, BIO.view, BIO.edit, RPT.standard]}
+  - {user: hweems, hr: E1034, created: "2011-08-07", last_signin: "2026-10-14",
+     perms: [ADM.view, ADM.edit, ADM.decision_release, ADM.deposit_post, BIO.view, BIO.edit, RPT.standard, RPT.extract]}
+  - {user: sgoforth, hr: E1035, created: "2023-08-13", last_signin: "2026-06-18",
+     perms: [REG.view, REC.view, AUD.view, RPT.standard]}
+  - {user: dledbetter, hr: E1036, created: "2022-07-07", last_signin: "2024-09-03",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: rwofford, hr: E1037, created: "2009-08-21", last_signin: "2025-02-11",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: mhargrove, hr: E1038, created: "2024-08-03", last_signin: "2026-07-30",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: tcrisp, hr: E1039, created: "2016-01-02", last_signin: "2026-08-12",
+     perms: [REG.view, REC.view, REC.grade_approve, AUD.view, AUD.exception, RPT.standard]}
+  - {user: wvance, hr: E1040, created: "2011-07-05", last_signin: "2026-10-13",
+     perms: [REG.view, REG.register, REG.section_build, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, RPT.standard]}
+  - {user: jjessup, hr: E1041, created: "2013-08-06", last_signin: "2026-11-07",
+     perms: [REG.view, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: zbledsoe, hr: E1042, created: "2025-06-27", last_signin: "2026-11-02",
+     perms: [REG.view, REG.section_build, REG.section_cancel, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: rmabry, hr: E1043, created: "2011-01-19", last_signin: "2026-11-03",
+     perms: [REG.view, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: hkimbrough, hr: E1044, created: "2014-08-04", last_signin: "2026-10-01",
+     perms: [REG.view, REG.register, REG.override, REC.view, AUD.view, AUD.exception, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard, RPT.query]}
+  - {user: mjeffcoat, hr: E1045, created: "2008-07-14", last_signin: "2026-11-01",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: llusk, hr: E1046, created: "2014-06-02", last_signin: "2026-11-06",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: hmims, hr: E1047, created: "2016-07-11", last_signin: "2026-10-08",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: gfunderburk, hr: E1048, created: "2015-08-19", last_signin: "2026-11-06",
+     perms: [REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: wwhitlock, hr: E1049, created: "2024-07-23", last_signin: "2026-10-14",
+     perms: [REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: dtalley, hr: E1050, created: "2021-08-04", last_signin: "2026-11-05",
+     perms: [REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: eivey, hr: E1051, created: "2017-06-12", last_signin: "2026-11-11",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, REG.view, REG.register, REC.view, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: qkirby, hr: E1052, created: "2018-01-03", last_signin: "2026-10-01",
+     perms: [ADM.view, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: tfite, hr: E1053, created: "2017-07-19", last_signin: "2026-11-04",
+     perms: [ADM.view, ADM.decision_release, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: zjustus, hr: E1054, created: "2012-08-20", last_signin: "2026-11-02",
+     perms: [ADM.view, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: phairston, hr: E1055, created: "2012-06-17", last_signin: "2026-10-10",
+     perms: [ADM.view, REG.view, REG.register, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: rmayes, hr: E1056, created: "2012-08-24", last_signin: "2026-10-12",
+     perms: [ADM.view, REG.view, REG.register, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard, RPT.query]}
+  - {user: ibivens, hr: E1057, created: "2012-06-04", last_signin: "2026-11-09",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, RPT.standard, RPT.query, RPT.extract, SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint]}
+  - {user: tquarles, hr: E1058, created: "2018-01-07", last_signin: "2026-11-04",
+     perms: [REG.view, REC.view, BIO.view, RPT.standard, RPT.query, RPT.extract, SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint]}
+  - {user: arhodes, hr: E1059, created: "2009-01-02", last_signin: "2026-11-12",
+     perms: [RPT.query, RPT.extract, SYS.job_scheduler, SYS.table_maint]}
+  - {user: dnance, hr: E1060, created: "2017-06-16", last_signin: "2026-11-07",
+     perms: [REG.view, BIO.view, BIO.edit]}
+  - {user: dtidwell, hr: E1061, created: "2009-07-20", last_signin: "2026-10-13",
+     perms: [REG.view, BIO.view]}
+  - {user: upace, hr: E1062, created: "2014-01-08", last_signin: "2026-10-10",
+     perms: [REG.view, BIO.view]}
+  - {user: hisom, hr: E1063, created: "2011-06-28", last_signin: "2026-10-01",
+     perms: [ADM.view, REG.view, REC.view, BIO.view, FA.view, RPT.standard, RPT.query, RPT.extract]}
+  - {user: lboudreaux, hr: E1064, created: "2018-08-01", last_signin: "2026-10-12",
+     perms: [ADM.view, REG.view, REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard, RPT.query]}
+  - {user: jlofton, hr: E1065, created: "2014-08-23", last_signin: "2025-04-22",
+     perms: [REG.view, BIO.view, SA.view]}
+  - {user: bshelby, hr: E1066, created: "2013-06-21", last_signin: "2026-10-09",
+     perms: [REG.view, BIO.view, SA.view]}
+  - {user: rnunley, hr: E1067, created: "2017-06-03", last_signin: "2026-06-02",
+     perms: [REG.view, REC.view, AUD.view, RPT.standard]}
+  - {user: pinman, hr: E1068, created: "2016-07-25", last_signin: "2026-10-02",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, FA.view, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: whollister, hr: E1069, created: "2001-07-02", last_signin: "2021-05-27",
+     perms: [REG.view, REG.register, REG.override, REG.waitlist, REG.section_build, REG.section_cancel, REC.view, REC.grade_approve, REC.transcript, REC.enroll_verify, REC.degree_confer, REC.ferpa_edit, AUD.view, AUD.exception, AUD.rule_edit, BIO.view, BIO.edit, RPT.standard, RPT.query]}
+  - {user: yeasley, hr: E1070, created: "2021-07-12", last_signin: "2024-05-30",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: gingram, hr: E1071, created: "2022-06-06", last_signin: "2025-08-14",
+     perms: [ADM.view, ADM.edit, ADM.fee_waive, ADM.decision_enter, BIO.view, BIO.edit, RPT.standard]}
+  - {user: mdykes, hr: E1072, created: "2012-08-01", last_signin: "2023-01-12",
+     perms: [REG.view, REG.section_build, REC.view, AUD.view, BIO.view, RPT.standard]}
+  - {user: uabernathy, hr: E1073, created: "2019-06-03", last_signin: "2026-07-14",
+     perms: [REC.view, BIO.view, BIO.ssn_view, FA.view, FA.verify, FA.package, FA.award_adjust, SA.view, RPT.standard]}
+  - {user: kpruett, hr: E1074, created: "2016-06-01", last_signin: "2025-12-18",
+     perms: [REG.view, REG.register, REG.waitlist, REC.view, REC.grade_change, REC.transcript, REC.enroll_verify, AUD.view, BIO.view, BIO.edit, RPT.standard]}
+  - {user: regfront, hr: null, kind: shared, owner: Registrar, created: "2017-08-14", last_signin: "2026-11-13",
+     perms: [REG.view, REC.view, REC.enroll_verify, BIO.view],
+     note: Front counter PC. Student workers use it to print enrollment verifications.}
+  - {user: audit2021, hr: null, kind: external, owner: Business Office, created: "2021-09-20", last_signin: "2021-11-05",
+     perms: [SA.view, FA.view, BIO.view, RPT.standard, RPT.query]}
+  - {user: sisjobs, hr: null, kind: service, owner: IT Applications, created: "2015-03-02", last_signin: "2026-11-15",
+     perms: [SYS.job_scheduler, RPT.extract, RPT.query],
+     note: Runs the nightly extracts to the Data Hub. No interactive sign-in.}
+  - {user: cornerstone-support, hr: null, kind: external, owner: IT Applications, created: "2026-09-08", last_signin: "2026-10-29",
+     perms: [SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint]}
+
+grants:
+  - {user: cnixon, perms: [FA.package, FA.award_adjust, FA.disburse],
+     granted: "2026-03-02", by: Director of Financial Aid, reason: Cover the Associate Director vacancy until the position is filled., expires: null,
+     note: "The new associate director started Aug 17, 2026."}
+  - {user: audit2021, perms: [SA.view, FA.view, BIO.view, RPT.standard, RPT.query],
+     granted: "2021-09-20", by: Bursar, reason: Temporary for audit season., expires: null}
+  - {user: cornerstone-support, perms: [SYS.user_admin, SYS.security_edit, SYS.job_scheduler, SYS.table_maint],
+     granted: "2026-09-08", by: Applications Analyst, reason: Vendor support for the fall upgrade., expires: "2026-12-31"}
+
+fact_sources:
+  - {question: "Who works here, in which job, since when", steward: Human Resources, source: Keystone HR position and separation export}
+  - {question: Who can do what in the SIS, steward: IT Applications, source: SIS security user list}
+  - {question: When an account was last used, steward: IT Applications, source: SIS sign-in log}
+  - {question: Why someone has access outside their job, steward: IT Applications, source: Access-request tickets in the service desk}
+  - {question: Which permissions conflict, steward: "Bursar, Registrar and Director of Financial Aid", source: "Conflict rules the three offices agreed, Sept 2026"}
+  - {question: What each job should hold, steward: null, source: null, note: Nobody keeps this. The proposed roles are a first draft for the offices to adopt or correct.}
+
+events:
+  - {date: "2017-02-06", what: The account provisioning job went live. It disables Entra ID accounts at separation. SIS accounts are local and are removed by hand.}
+  - {date: "2019-03-11", what: An admissions counselor was given code-table maintenance to fix a dropdown on the inquiry screen. Nobody took it back.}
+  - {date: "2021-06-30", what: The registrar retired. Her SIS account was never closed.}
+  - {date: "2021-09-20", what: "An account was set up for the outside auditors. The request said: temporary for audit season."}
+  - {date: "2024-01-02", what: A cashier was promoted to student accounts specialist. The new access was added. The old access stayed.}
+  - {date: "2026-03-02", what: The bursar was given aid packaging to cover the vacant associate director job in Financial Aid.}
+  - {date: "2026-08-17", what: The new associate director of financial aid started.}
+  - {date: "2026-09-08", what: "The SIS vendor was given an admin account for the fall upgrade, ending Dec 31."}

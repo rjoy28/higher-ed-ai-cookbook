@@ -20,4 +20,15 @@
 
 When two sources answer the same axis, the pattern doesn't pick one quietly: it names one as the record and uses the other as a witness. There, platform counts witness the CRM's inquiries, and the gap between them is the tracking audit.
 
-*Status: draft, identified in governance-and-risk work and stated here in general form. Applied a second time in recipe 19.*
+**Third application: internal control itself.** The [RCU Access Review](../test-kitchen/rcu-access-review/) demo answers the axis the pattern started with:
+
+| Question | Fact source |
+|---|---|
+| Who should have access | The HR record: job, office, status, earlier jobs |
+| Who does have access | The SIS security user list, with last sign-in |
+| Why access falls outside a job | The access-request log: reason, approver, end date |
+| What each job should hold | Nobody keeps it. The page proposes a first draft from the access people share. |
+
+The HR record is the record and the security user list is what gets fixed. A question with no fact source is named as a gap, not filled with judgment.
+
+*Status: draft, identified in governance-and-risk work and stated here in general form. Applied in recipe 19 and the Access Review demo.*
